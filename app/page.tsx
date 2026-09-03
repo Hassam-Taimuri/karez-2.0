@@ -19,9 +19,10 @@ import { JvCalculatorModal } from '../components/JvCalculatorModal';
 import { ProposalDraftModal } from '../components/ProposalDraftModal';
 
 import { useIsMobile } from '../hooks/use-mobile';
-import { SampleTenderDoc, BidderProfile, AuditReport, TenderComplianceData, PECCategory } from '../lib/types';
+import { SampleTenderDoc, BidderProfile, AuditReport, TenderComplianceData, PECCategory, JVRules, StampPaperAffidavit } from '../lib/types';
 import { SAMPLE_TENDERS } from '../lib/sample_tenders';
-import { auditBidderEligibility } from '../lib/compliance_engine';
+import { auditBidderEligibility, formatPKR } from '../lib/compliance_engine';
+import { renderPdfToImages, fileToDataUrl } from '../lib/pdf_pages';
 
 // Helper: compress image files client-side before sending over API (reduces 10MB to ~150KB)
 async function compressFileForAnalysis(file: File): Promise<{ base64Data: string; mimeType: string }> {
@@ -74,88 +75,155 @@ async function compressFileForAnalysis(file: File): Promise<{ base64Data: string
   });
 }
 
-// Helper: normalize extracted tender compliance data with complete defaults
-function normalizeTenderData(extracted: any, fileName: string): TenderComplianceData {
+const VALID_PEC_CATEGORIES: PECCategory[] = ['C-A', 'C-B', 'C-1', 'C-2', 'C-3', 'C-4', 'C-5', 'C-6'];
+
+// Helper: normalize extracted tender compliance data WITHOUT inventing values.
+// Anything the document did not state stays 0 / null / empty and is recorded
+// in notStatedFields so the UI can tell the user and the engine can flag it.
+function normalizeTenderData(
+  extracted: any,
+  fileName: string,
+  meta?: { provider: string; model: string; pagesAnalysed: number; inputMode: string },
+  totalPages?: number
+): TenderComplianceData {
   const cleanTitle = fileName.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
+  const notStated: string[] = [];
+
+  const num = (v: any): number => {
+    const n = Number(v);
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  };
+  const str = (v: any): string => (typeof v === 'string' && v.trim() ? v.trim() : '');
+
+  const pec = extracted?.pecRequirement || null;
+  const requiredCategory: PECCategory | null =
+    pec?.requiredCategory && VALID_PEC_CATEGORIES.includes(pec.requiredCategory)
+      ? (pec.requiredCategory as PECCategory)
+      : null;
+  if (!requiredCategory) notStated.push('Required PEC category');
+  const specializationCodes: string[] = Array.isArray(pec?.specializationCodes)
+    ? pec.specializationCodes.filter((c: any) => typeof c === 'string' && c.trim())
+    : [];
+  if (specializationCodes.length === 0) notStated.push('PEC specialization codes');
+
+  const fin = extracted?.financialCriteria || null;
+  const minTurnover = num(fin?.minAvgAnnualTurnoverPKR);
+  if (!minTurnover) notStated.push('Minimum annual turnover');
+  const cdrAmount = num(fin?.cdrAmountPKR);
+  if (!cdrAmount) notStated.push('CDR / Bid Security amount');
+
+  // Affidavits: use exactly what was extracted; empty array = not stated.
+  let affidavits: StampPaperAffidavit[] = [];
+  if (Array.isArray(extracted?.affidavits) && extracted.affidavits.length > 0) {
+    affidavits = extracted.affidavits.map((a: any, i: number) => ({
+      id: str(a?.id) || `aff-extracted-${i + 1}`,
+      title: str(a?.title) || `Affidavit / Undertaking ${i + 1}`,
+      stampPaperDenominationPKR: num(a?.stampPaperDenominationPKR),
+      requiredTextSummary: str(a?.requiredTextSummary),
+      isBlacklistingDeclarationRequired: a?.isBlacklistingDeclarationRequired === true,
+      isLitigationHistoryRequired: a?.isLitigationHistoryRequired === true,
+      isCorrectnessDeclarationRequired: a?.isCorrectnessDeclarationRequired === true,
+      sourcePage: num(a?.sourcePage),
+      confidenceScore: num(a?.confidenceScore),
+    }));
+  } else if (Array.isArray(extracted?.legalRequirements?.requiredAffidavits) && extracted.legalRequirements.requiredAffidavits.length > 0) {
+    // Legacy extraction shape — map it without inventing stamp values.
+    const lr = extracted.legalRequirements;
+    affidavits = lr.requiredAffidavits.map((text: string, i: number) => ({
+      id: `aff-extracted-${i + 1}`,
+      title: str(text) || `Affidavit / Undertaking ${i + 1}`,
+      stampPaperDenominationPKR: num(lr.stampPaperDenomination),
+      requiredTextSummary: str(text),
+      isBlacklistingDeclarationRequired: lr.blacklistingClause === true,
+      isLitigationHistoryRequired: false,
+      isCorrectnessDeclarationRequired: false,
+      sourcePage: num(lr.sourcePage),
+      confidenceScore: 0,
+    }));
+  } else {
+    notStated.push('Affidavit / stamp paper requirements');
+  }
+  if (affidavits.some((a) => !a.stampPaperDenominationPKR)) {
+    notStated.push('Stamp paper denomination');
+  }
+
+  // JV rules: null when the document said nothing about JVs.
+  let jvRules: JVRules | null = null;
+  const jv = extracted?.jvRules;
+  if (jv && typeof jv.allowedJV === 'boolean') {
+    jvRules = {
+      allowedJV: jv.allowedJV,
+      maxPartners: num(jv.maxPartners),
+      leadPartnerMinSharePercent: num(jv.leadPartnerMinSharePercent),
+      otherPartnerMinSharePercent: num(jv.otherPartnerMinSharePercent),
+      sourcePage: num(jv.sourcePage),
+      clauseText: str(jv.clauseText),
+      confidenceScore: num(jv.confidenceScore),
+    };
+    if (jv.allowedJV && !jvRules.maxPartners) notStated.push('JV partner cap');
+  } else if (extracted?.legalRequirements && typeof extracted.legalRequirements.jvAllowed === 'boolean') {
+    const lr = extracted.legalRequirements;
+    jvRules = {
+      allowedJV: lr.jvAllowed,
+      maxPartners: 0,
+      leadPartnerMinSharePercent: num(lr.jvLeadPartnerMinShare),
+      otherPartnerMinSharePercent: 0,
+      sourcePage: num(lr.sourcePage),
+      clauseText: '',
+      confidenceScore: 0,
+    };
+  } else {
+    notStated.push('Joint Venture (JV) rules');
+  }
 
   return {
-    extractedDate: extracted?.extractedDate || new Date().toISOString().split('T')[0],
-    documentFileName: extracted?.documentFileName || fileName,
-    totalPages: extracted?.totalPages || 1,
+    extractedDate: new Date().toISOString().split('T')[0],
+    documentFileName: fileName,
+    totalPages: totalPages || num(extracted?.totalPages) || 1,
     basicInfo: {
-      tenderId: extracted?.basicInfo?.tenderId || `PPRA-${Math.floor(1000 + Math.random() * 9000)}-2026`,
-      tenderTitle: extracted?.basicInfo?.tenderTitle || `Tender Document: ${cleanTitle}`,
-      procuringAgency: extracted?.basicInfo?.procuringAgency || 'NHA (National Highway Authority)',
-      biddingType: extracted?.basicInfo?.biddingType || 'Single Stage - Two Envelope (PPRA Rule 36-b)',
-      submissionDeadline: extracted?.basicInfo?.submissionDeadline || '30 Days from issue',
-      estimatedCostPKR: extracted?.basicInfo?.estimatedCostPKR || 450000000,
-      location: extracted?.basicInfo?.location || 'Islamabad, Pakistan',
-      ppraRuleReference: extracted?.basicInfo?.ppraRuleReference || 'PPRA Rules 2004 (Rule 36-b)',
-      sourcePage: extracted?.basicInfo?.sourcePage || 1,
+      tenderId: str(extracted?.basicInfo?.tenderId) || `UPLOAD-${cleanTitle.slice(0, 24) || 'TENDER'}`,
+      tenderTitle: str(extracted?.basicInfo?.tenderTitle) || `Tender Document: ${cleanTitle}`,
+      procuringAgency: (str(extracted?.basicInfo?.procuringAgency) || 'Not stated on pages analysed') as any,
+      biddingType: (str(extracted?.basicInfo?.biddingType) || 'Not stated on pages analysed') as any,
+      submissionDeadline: str(extracted?.basicInfo?.submissionDeadline) || 'Not stated on pages analysed',
+      estimatedCostPKR: num(extracted?.basicInfo?.estimatedCostPKR) || undefined,
+      location: str(extracted?.basicInfo?.location) || 'Not stated',
+      ppraRuleReference: str(extracted?.basicInfo?.ppraRuleReference) || 'Not stated',
+      sourcePage: num(extracted?.basicInfo?.sourcePage) || 1,
     },
     pecRequirement: {
-      requiredCategory: (extracted?.pecRequirement?.requiredCategory || 'C-3') as PECCategory,
-      specializationCodes: extracted?.pecRequirement?.specializationCodes || ['CE01', 'CE02', 'BC01'],
-      validityRequirement: extracted?.pecRequirement?.validityRequirement || 'Active FY 2026-27',
-      sourcePage: extracted?.pecRequirement?.sourcePage || 1,
-      clauseText: extracted?.pecRequirement?.clauseText || `PEC License Category ${extracted?.pecRequirement?.requiredCategory || 'C-3'} or above required with valid CE01 specialization.`,
-      confidenceScore: extracted?.pecRequirement?.confidenceScore || 92,
+      requiredCategory,
+      specializationCodes,
+      validityRequirement: str(pec?.validityRequirement),
+      sourcePage: num(pec?.sourcePage),
+      clauseText: str(pec?.clauseText),
+      confidenceScore: num(pec?.confidenceScore),
     },
     financialCriteria: {
-      minAvgAnnualTurnoverPKR: extracted?.financialCriteria?.minAvgAnnualTurnoverPKR || 350000000,
-      minNetWorthPKR: extracted?.financialCriteria?.minNetWorthPKR || 80000000,
-      minLiquidAssetsWorkingCapitalPKR: extracted?.financialCriteria?.minLiquidAssetsWorkingCapitalPKR || 40000000,
-      cdrAmountPKR: extracted?.financialCriteria?.cdrAmountPKR || 9000000,
-      cdrPercentage: extracted?.financialCriteria?.cdrPercentage || 2,
-      acceptableBankRating: extracted?.financialCriteria?.acceptableBankRating || 'AA or above',
-      sourcePage: extracted?.financialCriteria?.sourcePage || 1,
-      clauseText: extracted?.financialCriteria?.clauseText || '3-year average annual construction turnover PKR 350M+ and CDR 2% required.',
-      confidenceScore: extracted?.financialCriteria?.confidenceScore || 90,
+      minAvgAnnualTurnoverPKR: minTurnover,
+      minNetWorthPKR: num(fin?.minNetWorthPKR),
+      minLiquidAssetsWorkingCapitalPKR: num(fin?.minLiquidAssetsWorkingCapitalPKR),
+      cdrAmountPKR: cdrAmount,
+      cdrPercentage: num(fin?.cdrPercentage) || undefined,
+      acceptableBankRating: str(fin?.acceptableBankRating),
+      sourcePage: num(fin?.sourcePage),
+      clauseText: str(fin?.clauseText),
+      confidenceScore: num(fin?.confidenceScore),
     },
-    affidavits: (() => {
-      if (extracted?.affidavits && Array.isArray(extracted.affidavits)) {
-        return extracted.affidavits;
-      }
-      const lr = extracted?.legalRequirements;
-      if (lr?.requiredAffidavits && Array.isArray(lr.requiredAffidavits)) {
-        return lr.requiredAffidavits.map((text: string, i: number) => ({
-          id: `aff-extracted-${i + 1}`,
-          title: text,
-          stampPaperDenominationPKR: lr.stampPaperDenomination || 500,
-          requiredTextSummary: text,
-          isBlacklistingDeclarationRequired: lr.blacklistingClause || false,
-          isLitigationHistoryRequired: false,
-          isCorrectnessDeclarationRequired: true,
-          sourcePage: lr.sourcePage || 1,
-          confidenceScore: 80,
-        }));
-      }
-      return [
-        {
-          id: 'aff-custom-1',
-          title: 'Rs. 500 Non-Blacklisting & Correctness Stamp Affidavit',
-          stampPaperDenominationPKR: 500,
-          requiredTextSummary: 'Undertaking on Judicial Stamp Paper of Rs. 500 attesting firm is not blacklisted by any Government agency.',
-          isBlacklistingDeclarationRequired: true,
-          isLitigationHistoryRequired: true,
-          isCorrectnessDeclarationRequired: true,
-          sourcePage: 1,
-          confidenceScore: 95,
-        },
-      ];
-    })(),
-    jvRules: {
-      allowedJV: extracted?.jvRules?.allowedJV ?? extracted?.legalRequirements?.jvAllowed ?? true,
-      maxPartners: extracted?.jvRules?.maxPartners || 3,
-      leadPartnerMinSharePercent: extracted?.jvRules?.leadPartnerMinSharePercent || extracted?.legalRequirements?.jvLeadPartnerMinShare || 50,
-      otherPartnerMinSharePercent: extracted?.jvRules?.otherPartnerMinSharePercent || 25,
-      sourcePage: extracted?.jvRules?.sourcePage || extracted?.legalRequirements?.sourcePage || 1,
-      clauseText: extracted?.jvRules?.clauseText || 'JV allowed up to 3 partners with Lead partner holding 50%+ share.',
-      confidenceScore: extracted?.jvRules?.confidenceScore || 91,
-    },
-    overallOcrConfidence: extracted?.overallOcrConfidence || 92,
-    hasLowConfidenceWarnings: extracted?.hasLowConfidenceWarnings || false,
-    lowConfidencePages: extracted?.lowConfidencePages || [],
+    affidavits,
+    jvRules,
+    overallOcrConfidence: num(extracted?.overallOcrConfidence),
+    hasLowConfidenceWarnings: extracted?.hasLowConfidenceWarnings === true,
+    lowConfidencePages: Array.isArray(extracted?.lowConfidencePages) ? extracted.lowConfidencePages : [],
+    notStatedFields: notStated,
+    extractionMeta: meta
+      ? {
+          provider: meta.provider,
+          model: meta.model,
+          pagesAnalysed: meta.pagesAnalysed,
+          inputMode: meta.inputMode as any,
+        }
+      : undefined,
   };
 }
 
@@ -175,7 +243,8 @@ export default function Home() {
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
   const [analysisStage, setAnalysisStage] = useState<string>('');
   const [isLoadingData, setIsLoadingData] = useState<boolean>(false);
-  const [isFallbackData, setIsFallbackData] = useState<boolean>(false);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
+  const [analysisNotice, setAnalysisNotice] = useState<{ message: string; notStated: string[] } | null>(null);
 
   const [savedTenders, setSavedTenders] = useState<any[]>([]);
 
@@ -258,7 +327,7 @@ export default function Home() {
       avgAnnualTurnoverPKR: 0,
       cdrAvailableAmountPKR: 0,
       liquidAssetsPKR: 0,
-      ntnNumber: '',
+      fbrRegistrationNumber: '',
       ntnStatus: 'ACTIVE_TAXPAYER',
       bankRating: 'AA',
       isJV: false,
@@ -335,47 +404,87 @@ export default function Home() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    setIsFallbackData(false);
+    setAnalysisError(null);
+    setAnalysisNotice(null);
     setIsAnalyzing(true);
-    setAnalysisStage('⚡ Optimizing scan resolution & compressing document payload...');
 
     try {
-      // 1. Client-side compressed base64 (<200KB vs 10MB+)
-      const { base64Data, mimeType } = await compressFileForAnalysis(file);
+      // 1. Prepare payload: whole PDF (all pages) when possible, rendered
+      //    page images otherwise, single compressed image for scans.
+      const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+      let payload: any = null;
+      let firstPagePreview = '';
+      let totalPages = 1;
 
-      setAnalysisStage('🤖 AI Engine extracting PPRA eligibility & financial criteria...');
-
-      let extractedData = null;
-
-      try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 50000); // 50s timeout for AI response
-
-        const res = await fetch('/api/analyze-tender', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ imageBase64: base64Data, mimeType }),
-          signal: controller.signal,
-        });
-        clearTimeout(timeoutId);
-
-        if (res.ok) {
-          const data = await res.json();
-          if (data.success && data.extractedData) {
-            extractedData = data.extractedData;
-            setIsFallbackData(extractedData?.isFallback === true);
-          }
-        }
-      } catch (apiErr: any) {
-        if (apiErr?.name === 'AbortError') {
-          console.warn('Tender AI API request timed out or was aborted. Smoothly switching to PPRA OCR template fallback.');
+      if (isPdf) {
+        setAnalysisStage('Rendering PDF pages in your browser (pdf.js)...');
+        const { pageImages, numPages } = await renderPdfToImages(file, 12);
+        totalPages = numPages;
+        firstPagePreview = pageImages[0] || '';
+        if (file.size <= 15 * 1024 * 1024) {
+          // Small enough: send the whole PDF so the model reads every page.
+          const dataUrl = await fileToDataUrl(file);
+          payload = { pdfBase64: dataUrl, numPages };
         } else {
-          console.warn('Tender AI API call failed, utilizing fast PPRA OCR fallback:', apiErr);
+          payload = { images: pageImages, numPages };
         }
+      } else {
+        setAnalysisStage('Optimizing scan resolution & compressing payload...');
+        const { base64Data, mimeType } = await compressFileForAnalysis(file);
+        firstPagePreview = base64Data;
+        payload = { imageBase64: base64Data, mimeType };
       }
 
-      // 2. Guaranteed normalization of extracted compliance structure
-      const normalizedData = normalizeTenderData(extractedData, file.name);
+      setAnalysisStage('AI engine extracting PPRA eligibility & financial criteria...');
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 55000);
+      let res: Response;
+      try {
+        res = await fetch('/api/analyze-tender', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(timeoutId);
+      }
+
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.success || !data?.extractedData) {
+        throw new Error(
+          data?.error || `The analysis service returned HTTP ${res.status}. No tender was created.`
+        );
+      }
+
+      // 2. Normalize WITHOUT defaults — unknowns stay null/0 and are listed
+      //    in notStatedFields for the amber banner + engine flags.
+      const meta = data.meta
+        ? { ...data.meta, pagesAnalysed: data.meta.pagesAnalysed || totalPages }
+        : undefined;
+      const normalizedData = normalizeTenderData(data.extractedData, file.name, meta, totalPages);
+
+      const extractedClauses = [
+        normalizedData.pecRequirement.clauseText
+          ? {
+              id: 'custom-clause-1',
+              title: 'PEC Category & Specialization Requirements',
+              text: normalizedData.pecRequirement.clauseText,
+              category: 'pecLicensing' as const,
+              confidence: normalizedData.pecRequirement.confidenceScore,
+            }
+          : null,
+        normalizedData.financialCriteria.clauseText
+          ? {
+              id: 'custom-clause-2',
+              title: 'Financial Turnover & CDR Bid Security',
+              text: normalizedData.financialCriteria.clauseText,
+              category: 'financials' as const,
+              confidence: normalizedData.financialCriteria.confidenceScore,
+            }
+          : null,
+      ].filter(Boolean) as any[];
 
       const customTenderDoc: SampleTenderDoc = {
         id: `custom-${Date.now()}`,
@@ -384,28 +493,15 @@ export default function Home() {
         biddingType: normalizedData.basicInfo.biddingType,
         ppraRef: normalizedData.basicInfo.tenderId,
         deadline: normalizedData.basicInfo.submissionDeadline,
-        estimatedCost: `PKR ${(((normalizedData.basicInfo.estimatedCostPKR || 450000000)) / 1000000).toFixed(1)} Million`,
+        estimatedCost: normalizedData.basicInfo.estimatedCostPKR
+          ? formatPKR(normalizedData.basicInfo.estimatedCostPKR)
+          : 'Not stated on pages analysed',
         pages: [
           {
             pageNumber: 1,
             title: `${file.name} - Page 1`,
-            imageUrl: base64Data,
-            extractedClauses: [
-              {
-                id: 'custom-clause-1',
-                title: 'PEC Category & Specialization Requirements',
-                text: normalizedData.pecRequirement.clauseText,
-                category: 'pecLicensing',
-                confidence: normalizedData.pecRequirement.confidenceScore,
-              },
-              {
-                id: 'custom-clause-2',
-                title: 'Financial Turnover & CDR Bid Security',
-                text: normalizedData.financialCriteria.clauseText,
-                category: 'financials',
-                confidence: normalizedData.financialCriteria.confidenceScore,
-              },
-            ],
+            imageUrl: firstPagePreview,
+            extractedClauses,
           },
         ],
         extractedData: normalizedData,
@@ -414,13 +510,24 @@ export default function Home() {
 
       setCurrentTender(customTenderDoc);
 
+      const modeText =
+        meta?.inputMode === 'pdf'
+          ? `full ${totalPages}-page document`
+          : meta?.inputMode === 'images'
+          ? `${meta.pagesAnalysed} rendered page image(s) of ${totalPages}`
+          : 'single page image';
+      setAnalysisNotice({
+        message: `Analysed ${modeText}${meta ? ` via ${meta.provider} (${meta.model})` : ''}.`,
+        notStated: normalizedData.notStatedFields || [],
+      });
+
       try {
         if (user) {
           await saveTenderToCompany(user.uid, currentCompanyId || 'default', {
             tenderTitle: normalizedData.basicInfo.tenderTitle,
             procuringAgency: normalizedData.basicInfo.procuringAgency,
             tenderId: normalizedData.basicInfo.tenderId,
-            estimatedCostPKR: normalizedData.basicInfo.estimatedCostPKR,
+            estimatedCostPKR: normalizedData.basicInfo.estimatedCostPKR ?? null,
             submissionDeadline: normalizedData.basicInfo.submissionDeadline,
             fileName: file.name,
           });
@@ -432,8 +539,15 @@ export default function Home() {
       }
 
       setCurrentPage(1);
-    } catch (err) {
+    } catch (err: any) {
+      // Deliberate: no tender is created on failure — the user sees the
+      // error instead of fabricated compliance data.
       console.error('File upload processing error:', err);
+      setAnalysisError(
+        err?.name === 'AbortError'
+          ? 'The analysis timed out. Please retry — no placeholder data was generated.'
+          : err?.message || 'The document could not be analysed. No placeholder data was generated.'
+      );
     } finally {
       setIsAnalyzing(false);
       setAnalysisStage('');
@@ -557,23 +671,52 @@ export default function Home() {
         </div>
       )}
 
-      {/* Fallback Data Warning Top Banner */}
-      {isFallbackData && !isAnalyzing && (
+      {/* Analysis Error Banner — extraction failed, NO tender was created */}
+      {analysisError && !isAnalyzing && (
+        <div
+          className={`fixed left-0 right-0 z-40 bg-red-950/95 border-b border-red-600/60 py-2 px-4 flex items-center justify-between gap-2 text-red-100 shadow-md ${
+            isLoadingData ? 'top-8' : 'top-0'
+          }`}
+        >
+          <div className="flex items-center justify-center gap-2 mx-auto">
+            <TriangleAlert className="w-4 h-4 text-red-400 shrink-0" />
+            <span className="text-xs text-red-100 font-medium">
+              Analysis failed: {analysisError}
+            </span>
+          </div>
+          <button
+            onClick={() => setAnalysisError(null)}
+            className="p-0.5 hover:bg-red-800/60 rounded text-red-300 hover:text-red-100 transition-colors shrink-0"
+            title="Dismiss"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
+      {/* Extraction Notice Banner — what was analysed + criteria NOT stated */}
+      {analysisNotice && !analysisError && !isAnalyzing && (
         <div
           className={`fixed left-0 right-0 z-39 bg-amber-900/95 border-b border-amber-600/50 py-1.5 px-4 flex items-center justify-between gap-2 text-amber-100 shadow-md ${
             isLoadingData ? 'top-8' : 'top-0'
           }`}
         >
-          <div className="flex items-center justify-center gap-2 mx-auto">
+          <div className="flex items-center justify-center gap-2 mx-auto text-center">
             <TriangleAlert className="w-3.5 h-3.5 text-amber-400 shrink-0" />
             <span className="text-xs text-amber-100">
-              AI models are at high demand. Showing estimated template data — upload your PDF again for real analysis.
+              {analysisNotice.message}
+              {analysisNotice.notStated.length > 0 && (
+                <>
+                  {' '}Not stated on the pages analysed (flagged for human review):{' '}
+                  <strong>{analysisNotice.notStated.join(', ')}</strong>.
+                </>
+              )}
             </span>
           </div>
           <button
-            onClick={() => setIsFallbackData(false)}
+            onClick={() => setAnalysisNotice(null)}
             className="p-0.5 hover:bg-amber-800/60 rounded text-amber-300 hover:text-amber-100 transition-colors shrink-0"
-            title="Dismiss warning"
+            title="Dismiss"
           >
             <X className="w-3.5 h-3.5" />
           </button>
@@ -644,6 +787,7 @@ export default function Home() {
         onClose={() => setIsProposalModalOpen(false)}
         tenderData={currentTender?.extractedData}
         bidderProfile={currentBidder}
+        auditReport={auditReport}
         language={language}
       />
     </div>

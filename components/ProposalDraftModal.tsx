@@ -25,6 +25,7 @@ interface ProposalDraftModalProps {
   onClose: () => void;
   tenderData: any;
   bidderProfile: any;
+  auditReport?: any;
   language?: 'en' | 'ur';
 }
 
@@ -33,6 +34,7 @@ export function ProposalDraftModal({
   onClose,
   tenderData,
   bidderProfile,
+  auditReport,
   language = 'en',
 }: ProposalDraftModalProps) {
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
@@ -66,7 +68,7 @@ export function ProposalDraftModal({
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ tenderData, bidderProfile }),
+        body: JSON.stringify({ tenderData, bidderProfile, auditReport }),
         signal: controller.signal,
       });
       clearTimeout(timeoutId);
@@ -89,7 +91,7 @@ export function ProposalDraftModal({
     } finally {
       setIsGenerating(false);
     }
-  }, [tenderData, bidderProfile]);
+  }, [tenderData, bidderProfile, auditReport]);
 
   // Clean up abort controller ONLY on unmount or when modal closes
   useEffect(() => {

@@ -72,9 +72,17 @@ def clean_scanned_pdf(page_image: np.ndarray) -> np.ndarray:
             blurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 15, 8
         )
 
-        # Step 5: Unsharp Mask Sharpening
+        # Step 5: Despeckle — median blur kills salt-and-pepper photocopy
+        # noise; a morphological open on the inverted image (== close on the
+        # white-background image) removes isolated dark specks the median
+        # filter leaves behind.
+        despeckled = cv2.medianBlur(binarized, 3)
+        speck_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2))
+        despeckled = cv2.morphologyEx(despeckled, cv2.MORPH_CLOSE, speck_kernel)
+
+        # Step 6: Unsharp Mask Sharpening
         sharpen_kernel = np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]], dtype=np.float32)
-        sharpened = cv2.filter2D(binarized, -1, sharpen_kernel)
+        sharpened = cv2.filter2D(despeckled, -1, sharpen_kernel)
 
         # Convert back to 3-channel BGR for model input compatibility
         cleaned_bgr = cv2.cvtColor(sharpened, cv2.COLOR_GRAY2BGR)
@@ -169,7 +177,29 @@ Output strictly valid JSON matching this schema:
 """
 
 
+def main() -> int:
+    """CLI: python scripts/clean_scanned_pdf.py input.png output.png"""
+    if len(sys.argv) != 3:
+        print("Usage: python scripts/clean_scanned_pdf.py <input_image> <output_image>", file=sys.stderr)
+        return 2
+    if not HAS_OPENCV:
+        print("OpenCV is not installed. Run: pip install opencv-python-headless numpy", file=sys.stderr)
+        return 1
+
+    in_path, out_path = sys.argv[1], sys.argv[2]
+    image = cv2.imread(in_path)
+    if image is None:
+        print(f"Could not read image: {in_path}", file=sys.stderr)
+        return 1
+
+    cleaned = clean_scanned_pdf(image)
+    if not cv2.imwrite(out_path, cleaned):
+        print(f"Could not write image: {out_path}", file=sys.stderr)
+        return 1
+
+    print(f"Cleaned {in_path} -> {out_path} ({image.shape[1]}x{image.shape[0]})")
+    return 0
+
+
 if __name__ == "__main__":
-    print("Karez 2.0 Pre-processor loaded successfully.")
-    print("Qwen-VL Prompt Engine generated:")
-    print(build_qwen_vl_prompt()[:300] + "...")
+    sys.exit(main())

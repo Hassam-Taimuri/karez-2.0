@@ -18,7 +18,7 @@ export const SAMPLE_TENDERS: SampleTenderDoc[] = [
       {
         pageNumber: 1,
         title: 'Title Page & Invitation for Bids (IFB)',
-        imageUrl: 'https://picsum.photos/seed/nha_page1/800/1100',
+        imageUrl: '/sample-pages/nha_page1.png',
         extractedClauses: [
           {
             id: 'c1',
@@ -32,7 +32,7 @@ export const SAMPLE_TENDERS: SampleTenderDoc[] = [
       {
         pageNumber: 4,
         title: 'PEC License & Contractor Qualification',
-        imageUrl: 'https://picsum.photos/seed/nha_page4/800/1100',
+        imageUrl: '/sample-pages/nha_page4.png',
         extractedClauses: [
           {
             id: 'c2',
@@ -46,7 +46,7 @@ export const SAMPLE_TENDERS: SampleTenderDoc[] = [
       {
         pageNumber: 7,
         title: 'Financial Turnover & CDR Bid Security',
-        imageUrl: 'https://picsum.photos/seed/nha_page7/800/1100',
+        imageUrl: '/sample-pages/nha_page7.png',
         extractedClauses: [
           {
             id: 'c3',
@@ -60,7 +60,7 @@ export const SAMPLE_TENDERS: SampleTenderDoc[] = [
       {
         pageNumber: 12,
         title: 'Legal Undertakings & Stamp Paper Affidavits',
-        imageUrl: 'https://picsum.photos/seed/nha_page12/800/1100',
+        imageUrl: '/sample-pages/nha_page12.png',
         extractedClauses: [
           {
             id: 'c4',
@@ -74,7 +74,7 @@ export const SAMPLE_TENDERS: SampleTenderDoc[] = [
       {
         pageNumber: 15,
         title: 'Joint Venture (JV) Rules & Lead Share',
-        imageUrl: 'https://picsum.photos/seed/nha_page15/800/1100',
+        imageUrl: '/sample-pages/nha_page15.png',
         extractedClauses: [
           {
             id: 'c5',
@@ -183,7 +183,7 @@ export const SAMPLE_TENDERS: SampleTenderDoc[] = [
       {
         pageNumber: 1,
         title: 'WAPDA Notice Inviting Tender',
-        imageUrl: 'https://picsum.photos/seed/wapda_p1/800/1100',
+        imageUrl: '/sample-pages/wapda_page1.png',
         extractedClauses: [
           {
             id: 'wc1',
@@ -197,7 +197,7 @@ export const SAMPLE_TENDERS: SampleTenderDoc[] = [
       {
         pageNumber: 3,
         title: 'PEC Category C-A Mandate',
-        imageUrl: 'https://picsum.photos/seed/wapda_p3/800/1100',
+        imageUrl: '/sample-pages/wapda_page3.png',
         extractedClauses: [
           {
             id: 'wc2',
@@ -211,7 +211,7 @@ export const SAMPLE_TENDERS: SampleTenderDoc[] = [
       {
         pageNumber: 8,
         title: 'Financial & Bank Guarantee Clause',
-        imageUrl: 'https://picsum.photos/seed/wapda_p8/800/1100',
+        imageUrl: '/sample-pages/wapda_page8.png',
         extractedClauses: [
           {
             id: 'wc3',
@@ -323,7 +323,7 @@ export const SAMPLE_TENDERS: SampleTenderDoc[] = [
       {
         pageNumber: 1,
         title: 'LDA Procurement Notice',
-        imageUrl: 'https://picsum.photos/seed/lda_p1/800/1100',
+        imageUrl: '/sample-pages/lda_page1.png',
         extractedClauses: [
           {
             id: 'lc1',

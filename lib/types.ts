@@ -37,7 +37,7 @@ export interface TenderBasicInfo {
 }
 
 export interface PECRequirement {
-  requiredCategory: PECCategory;
+  requiredCategory: PECCategory | null; // null = NOT STATED on the pages analysed
   specializationCodes: string[]; // e.g. ["CE01", "CE02", "CE09", "CE10", "BC01"]
   validityRequirement: string;
   sourcePage: number;
@@ -45,6 +45,9 @@ export interface PECRequirement {
   confidenceScore: number; // 0 to 100%
 }
 
+// In every PKR field below, 0 means NOT STATED on the pages analysed.
+// The compliance engine must flag such fields for human review, never
+// substitute a default threshold.
 export interface FinancialCriteria {
   minAvgAnnualTurnoverPKR: number; // 3-year avg turnover
   minNetWorthPKR: number;
@@ -55,6 +58,13 @@ export interface FinancialCriteria {
   sourcePage: number;
   clauseText: string;
   confidenceScore: number;
+}
+
+export interface ExtractionMeta {
+  provider: string; // 'gemini' | 'qwen'
+  model: string;
+  pagesAnalysed: number;
+  inputMode: 'pdf' | 'images' | 'single-image' | 'sample';
 }
 
 export interface StampPaperAffidavit {
@@ -83,14 +93,16 @@ export interface TenderComplianceData {
   basicInfo: TenderBasicInfo;
   pecRequirement: PECRequirement;
   financialCriteria: FinancialCriteria;
-  affidavits: StampPaperAffidavit[];
-  jvRules: JVRules;
+  affidavits: StampPaperAffidavit[]; // empty array = no affidavit requirements stated on pages analysed
+  jvRules: JVRules | null; // null = JV rules NOT STATED on the pages analysed
   extractedDate: string;
   documentFileName: string;
   totalPages: number;
   overallOcrConfidence: number; // e.g., 88%
   hasLowConfidenceWarnings: boolean;
   lowConfidencePages: number[];
+  notStatedFields?: string[]; // human-readable list of criteria the document did not state
+  extractionMeta?: ExtractionMeta;
 }
 
 export interface BidderProfile {

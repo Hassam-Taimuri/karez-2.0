@@ -160,8 +160,8 @@ export function ScannedPreprocessingDemo({
                         <p className="text-slate-600 text-xs">{stepObj.desc}</p>
                       </div>
 
-                      <div className="text-right font-mono text-[10px] text-slate-500">
-                        OpenCV Python execution: 14.2 ms
+                      <div className="text-right font-mono text-[10px] text-amber-700 max-w-[180px]">
+                        Concept visualisation — the real pipeline is scripts/clean_scanned_pdf.py
                       </div>
                     </div>
 
@@ -232,7 +232,8 @@ export function ScannedPreprocessingDemo({
         {/* Footer */}
         <div className="p-4 border-t border-[#CDE0D2] bg-[#F4F8F5] flex items-center justify-between">
           <span className="text-[11px] text-slate-600 font-medium">
-            OpenCV pipeline executes server-side or in browser pre-processor prior to AI extraction.
+            Concept visualisation (CSS). Run the real pipeline with: python scripts/clean_scanned_pdf.py in.png out.png
+            — see public/sample-pages/nha_page7_cleaned.png for genuine OpenCV output.
           </span>
           <button
             onClick={onClose}

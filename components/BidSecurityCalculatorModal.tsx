@@ -42,9 +42,10 @@ export function BidSecurityCalculatorModal({
   onClose,
   tender,
 }: BidSecurityCalculatorModalProps) {
-  const tenderEstimatedCost = tender?.extractedData?.basicInfo?.estimatedCostPKR || 450000000;
-  const tenderCdrRequired = tender?.extractedData?.financialCriteria?.cdrAmountPKR || 9000000;
-  const tenderCdrPercent = tender?.extractedData?.financialCriteria?.cdrPercentage || 2;
+  // Values not stated in the tender default to 0 — never to invented figures.
+  const tenderEstimatedCost = tender?.extractedData?.basicInfo?.estimatedCostPKR || 0;
+  const tenderCdrRequired = tender?.extractedData?.financialCriteria?.cdrAmountPKR || 0;
+  const tenderCdrPercent = tender?.extractedData?.financialCriteria?.cdrPercentage || 0;
   const procuringAgency = tender?.extractedData?.basicInfo?.procuringAgency || tender?.agency || 'Procuring Agency';
 
   // Contractor Input State
@@ -55,13 +56,12 @@ export function BidSecurityCalculatorModal({
   const [instrumentType, setInstrumentType] = useState<'CDR' | 'Bank_Guarantee' | 'Pay_Order'>('CDR');
   const [payeeTitle, setPayeeTitle] = useState<string>(`General Manager (RAMD), ${procuringAgency}`);
   const [validityDays, setValidityDays] = useState<number>(120);
-  const [cdrNumber, setCdrNumber] = useState<string>('CDR-2026-894102');
 
   React.useEffect(() => {
     if (tender) {
-      const cost = tender.extractedData?.basicInfo?.estimatedCostPKR || 450000000;
-      const cdr = tender.extractedData?.financialCriteria?.cdrAmountPKR || 9000000;
-      const pct = tender.extractedData?.financialCriteria?.cdrPercentage || 2;
+      const cost = tender.extractedData?.basicInfo?.estimatedCostPKR || 0;
+      const cdr = tender.extractedData?.financialCriteria?.cdrAmountPKR || 0;
+      const pct = tender.extractedData?.financialCriteria?.cdrPercentage || 0;
       const agency = tender.extractedData?.basicInfo?.procuringAgency || tender.agency || 'Procuring Agency';
       setEstimatedCostInput(cost);
       setRequiredPercentInput(pct);
@@ -134,7 +134,9 @@ export function BidSecurityCalculatorModal({
                 </div>
                 <div className="text-sm font-black">
                   {isOverallCdrValid
-                    ? `Your CDR instrument of ${formatPKR(contractorCdrAmount)} complies with 2% Tender Security requirements.`
+                    ? estimatedCostInput > 0 && requiredPercentInput > 0
+                      ? `Your CDR instrument of ${formatPKR(contractorCdrAmount)} meets the ${requiredPercentInput}% tender security requirement.`
+                      : 'Enter the estimated cost and security % from the tender notice — these were not stated on the pages analysed.'
                     : 'The entered CDR details fail mandatory PPRA Rule 25 parameters. Correct issues below before sealing.'}
                 </div>
               </div>
@@ -295,7 +297,7 @@ export function BidSecurityCalculatorModal({
               <div className={`p-2.5 rounded-lg border flex items-center justify-between ${isAmountValid ? 'bg-emerald-50 border-emerald-200 text-emerald-950' : 'bg-rose-50 border-rose-200 text-rose-950'}`}>
                 <div className="flex items-center gap-2">
                   {isAmountValid ? <CheckCircle2 className="w-4 h-4 text-emerald-600" /> : <X className="w-4 h-4 text-rose-600" />}
-                  <span>CDR Amount &gt;= Required 2%</span>
+                  <span>CDR Amount &gt;= Required {requiredPercentInput > 0 ? `${requiredPercentInput}%` : '% (not stated)'}</span>
                 </div>
                 <span className="font-mono font-bold">{formatPKR(contractorCdrAmount)}</span>
               </div>

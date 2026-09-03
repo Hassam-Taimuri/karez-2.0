@@ -36,19 +36,22 @@ export function JvCalculatorModal({
   onClose,
   tender,
 }: JvCalculatorModalProps) {
-  const tenderTurnoverRequired = tender?.extractedData?.financialCriteria?.minAvgAnnualTurnoverPKR || 350000000;
-  const tenderPecCategoryRequired = tender?.extractedData?.pecRequirement?.requiredCategory || 'C-3';
-  const tenderMaxJvPartners = tender?.extractedData?.jvRules?.maxPartners || 3;
-  const minLeadSharePercent = tender?.extractedData?.jvRules?.leadPartnerMinSharePercent || 50;
-  const minPartnerSharePercent = tender?.extractedData?.jvRules?.otherPartnerMinSharePercent || 25;
+  // Requirements not stated in the tender stay 0 and are shown as "Not stated"
+  // — the calculator never substitutes typical values.
+  const tenderTurnoverRequired = tender?.extractedData?.financialCriteria?.minAvgAnnualTurnoverPKR || 0;
+  const tenderMaxJvPartners = tender?.extractedData?.jvRules?.maxPartners || 0;
+  const minLeadSharePercent = tender?.extractedData?.jvRules?.leadPartnerMinSharePercent || 0;
+  const minPartnerSharePercent = tender?.extractedData?.jvRules?.otherPartnerMinSharePercent || 0;
+  const partnerCapForUi = tenderMaxJvPartners > 0 ? tenderMaxJvPartners : 10;
 
-  // Contractor Input State: Default JV configuration
+  // Contractor Input State: two empty partner rows — turnovers are the
+  // bidder's own inputs and start at 0.
   const [partners, setPartners] = useState<JvPartner[]>([
     {
       name: 'M/s Lead Contractor (Partner A)',
       sharePercent: 60,
       pecCategory: 'C-2',
-      avgTurnoverPKR: 250000000,
+      avgTurnoverPKR: 0,
       isBlacklisted: false,
       hasLitigation: false,
     },
@@ -56,7 +59,7 @@ export function JvCalculatorModal({
       name: 'M/s Associate Builder (Partner B)',
       sharePercent: 40,
       pecCategory: 'C-3',
-      avgTurnoverPKR: 150000000,
+      avgTurnoverPKR: 0,
       isBlacklisted: false,
       hasLitigation: false,
     },
@@ -68,20 +71,24 @@ export function JvCalculatorModal({
   const totalSharePercent = partners.reduce((sum, p) => sum + p.sharePercent, 0);
   const isSharesSum100 = totalSharePercent === 100;
 
-  // Lead Partner Identification & Checks
+  // Lead Partner Identification & Checks (only enforceable when stated)
   const leadPartner = [...partners].sort((a, b) => b.sharePercent - a.sharePercent)[0];
-  const isLeadShareValid = leadPartner.sharePercent >= minLeadSharePercent;
+  const isLeadShareValid = minLeadSharePercent === 0 || leadPartner.sharePercent >= minLeadSharePercent;
 
   // Other Partners Checks
   const nonLeadPartners = partners.filter((p) => p !== leadPartner);
-  const isOtherPartnersValid = nonLeadPartners.every((p) => p.sharePercent >= minPartnerSharePercent);
+  const isOtherPartnersValid =
+    minPartnerSharePercent === 0 || nonLeadPartners.every((p) => p.sharePercent >= minPartnerSharePercent);
 
   // Combined Financial Turnover Check
   const combinedTurnoverPKR = partners.reduce((sum, p) => sum + p.avgTurnoverPKR, 0);
-  const isTurnoverValid = combinedTurnoverPKR >= tenderTurnoverRequired;
+  const isTurnoverValid = tenderTurnoverRequired === 0 || combinedTurnoverPKR >= tenderTurnoverRequired;
 
   // Partner Disqualification Check
   const anyPartnerBlacklisted = partners.some((p) => p.isBlacklisted);
+
+  const hasStatedRules =
+    tenderTurnoverRequired > 0 || tenderMaxJvPartners > 0 || minLeadSharePercent > 0 || minPartnerSharePercent > 0;
 
   const isOverallJvEligible =
     isSharesSum100 &&
@@ -89,7 +96,7 @@ export function JvCalculatorModal({
     isOtherPartnersValid &&
     isTurnoverValid &&
     !anyPartnerBlacklisted &&
-    partners.length <= tenderMaxJvPartners;
+    (tenderMaxJvPartners === 0 || partners.length <= tenderMaxJvPartners);
 
   const updatePartner = (index: number, field: keyof JvPartner, value: any) => {
     setPartners((prev) => {
@@ -100,14 +107,14 @@ export function JvCalculatorModal({
   };
 
   const addPartner = () => {
-    if (partners.length >= tenderMaxJvPartners) return;
+    if (partners.length >= partnerCapForUi) return;
     setPartners((prev) => [
       ...prev,
       {
         name: `M/s JV Partner ${prev.length + 1}`,
         sharePercent: 0,
         pecCategory: 'C-4',
-        avgTurnoverPKR: 50000000,
+        avgTurnoverPKR: 0,
         isBlacklisted: false,
         hasLitigation: false,
       },
@@ -172,7 +179,11 @@ export function JvCalculatorModal({
                 </div>
                 <div className="text-sm font-black">
                   {isOverallJvEligible
-                    ? `Combined Turnover of ${formatPKR(combinedTurnoverPKR)} exceeds mandatory requirement (${formatPKR(tenderTurnoverRequired)}).`
+                    ? hasStatedRules
+                      ? tenderTurnoverRequired > 0
+                        ? `Combined Turnover of ${formatPKR(combinedTurnoverPKR)} meets the stated requirement (${formatPKR(tenderTurnoverRequired)}).`
+                        : 'Configuration satisfies the JV rules stated in the analysed pages.'
+                      : 'No JV thresholds were stated on the pages analysed — verify the JV clause manually before relying on this result.'
                     : 'Your JV configuration violates minimum share thresholds or financial turnover rules. Adjust partner parameters below.'}
                 </div>
               </div>
@@ -190,19 +201,19 @@ export function JvCalculatorModal({
           <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
             <div>
               <div className="text-[10px] font-bold text-slate-500 uppercase">Max JV Partners</div>
-              <div className="font-extrabold text-slate-900">{tenderMaxJvPartners} Partners Max</div>
+              <div className="font-extrabold text-slate-900">{tenderMaxJvPartners > 0 ? `${tenderMaxJvPartners} Partners Max` : 'Not stated'}</div>
             </div>
             <div>
               <div className="text-[10px] font-bold text-slate-500 uppercase">Lead Partner Min Share</div>
-              <div className="font-extrabold text-[#00401A]">{minLeadSharePercent}% Minimum</div>
+              <div className="font-extrabold text-[#00401A]">{minLeadSharePercent > 0 ? `${minLeadSharePercent}% Minimum` : 'Not stated'}</div>
             </div>
             <div>
               <div className="text-[10px] font-bold text-slate-500 uppercase">Minor Partner Min Share</div>
-              <div className="font-extrabold text-slate-900">{minPartnerSharePercent}% Minimum</div>
+              <div className="font-extrabold text-slate-900">{minPartnerSharePercent > 0 ? `${minPartnerSharePercent}% Minimum` : 'Not stated'}</div>
             </div>
             <div>
               <div className="text-[10px] font-bold text-slate-500 uppercase">Required Combined Turnover</div>
-              <div className="font-extrabold text-emerald-800">{formatPKR(tenderTurnoverRequired)}</div>
+              <div className="font-extrabold text-emerald-800">{tenderTurnoverRequired > 0 ? formatPKR(tenderTurnoverRequired) : 'Not stated'}</div>
             </div>
           </div>
 
@@ -210,9 +221,9 @@ export function JvCalculatorModal({
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <label className="text-xs font-bold text-slate-800 uppercase tracking-wider">
-                Consortium Partners ({partners.length} / {tenderMaxJvPartners}):
+                Consortium Partners ({partners.length}{tenderMaxJvPartners > 0 ? ` / ${tenderMaxJvPartners}` : ' — cap not stated'}):
               </label>
-              {partners.length < tenderMaxJvPartners && (
+              {partners.length < partnerCapForUi && (
                 <button
                   onClick={addPartner}
                   className="bg-[#00401A] hover:bg-[#002D12] text-white text-xs px-3 py-1 rounded-lg font-bold transition-all shadow-xs cursor-pointer"
@@ -336,7 +347,7 @@ export function JvCalculatorModal({
               <div className={`p-2.5 rounded-lg border flex items-center justify-between ${isLeadShareValid ? 'bg-emerald-50 border-emerald-200 text-emerald-950' : 'bg-rose-50 border-rose-200 text-rose-950'}`}>
                 <div className="flex items-center gap-2">
                   {isLeadShareValid ? <CheckCircle2 className="w-4 h-4 text-emerald-600" /> : <X className="w-4 h-4 text-rose-600" />}
-                  <span>Lead Partner Share &gt;= {minLeadSharePercent}%</span>
+                  <span>Lead Partner Share {minLeadSharePercent > 0 ? `>= ${minLeadSharePercent}%` : '(threshold not stated)'}</span>
                 </div>
                 <span className="font-mono font-bold">{leadPartner.sharePercent}%</span>
               </div>
@@ -352,7 +363,7 @@ export function JvCalculatorModal({
               <div className={`p-2.5 rounded-lg border flex items-center justify-between ${isOtherPartnersValid ? 'bg-emerald-50 border-emerald-200 text-emerald-950' : 'bg-rose-50 border-rose-200 text-rose-950'}`}>
                 <div className="flex items-center gap-2">
                   {isOtherPartnersValid ? <CheckCircle2 className="w-4 h-4 text-emerald-600" /> : <X className="w-4 h-4 text-rose-600" />}
-                  <span>Minor Partner Thresholds &gt;= {minPartnerSharePercent}%</span>
+                  <span>Minor Partner Thresholds {minPartnerSharePercent > 0 ? `>= ${minPartnerSharePercent}%` : '(not stated)'}</span>
                 </div>
                 <span className="font-mono font-bold">{isOtherPartnersValid ? 'Pass' : 'Fail'}</span>
               </div>

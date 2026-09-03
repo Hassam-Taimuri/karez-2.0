@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { Sliders, X, Check, RefreshCw, Building2, ShieldAlert } from 'lucide-react';
 import { BidderProfile, PECCategory } from '../lib/types';
-import { formatPKR } from '../lib/compliance_engine';
+import { formatPKR, MAX_PLAUSIBLE_TURNOVER_PKR, MAX_PLAUSIBLE_CDR_PKR } from '../lib/compliance_engine';
 
 interface BidderProfileModalProps {
   isOpen: boolean;
@@ -129,6 +129,12 @@ export function BidderProfileModal({
               <span className="text-[10px] text-slate-500 mt-1 block">
                 Formatted: {formatPKR(formData.avgAnnualTurnoverPKR)}
               </span>
+              {formData.avgAnnualTurnoverPKR > MAX_PLAUSIBLE_TURNOVER_PKR && (
+                <span className="text-[10px] text-red-600 font-bold mt-1 block">
+                  Implausible value ({formatPKR(formData.avgAnnualTurnoverPKR)}). Even the largest Pakistani
+                  contractors report tens of billions PKR — check for extra zeros. The audit will flag this.
+                </span>
+              )}
             </div>
 
             <div>
@@ -145,6 +151,12 @@ export function BidderProfileModal({
               <span className="text-[10px] text-slate-500 mt-1 block">
                 Formatted: {formatPKR(formData.cdrAvailableAmountPKR)}
               </span>
+              {formData.cdrAvailableAmountPKR > MAX_PLAUSIBLE_CDR_PKR && (
+                <span className="text-[10px] text-red-600 font-bold mt-1 block">
+                  Implausible CDR ({formatPKR(formData.cdrAvailableAmountPKR)}). Bid securities run 2–5% of
+                  project cost — check for extra zeros. The audit will flag this.
+                </span>
+              )}
             </div>
           </div>
 
