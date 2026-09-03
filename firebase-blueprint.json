@@ -1,0 +1,63 @@
+{
+  "entities": {
+    "tenders": {
+      "title": "Tenders",
+      "description": "Saved tender analysis results",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "companyId": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["userId", "createdAt", "status"]
+    },
+    "companies": {
+      "title": "Companies",
+      "description": "Bidder company profiles",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["userId"]
+    },
+    "bidderProfiles": {
+      "title": "Bidder Profiles",
+      "description": "Contractor bidder profile information",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["userId"]
+    },
+    "bids": {
+      "title": "Bids",
+      "description": "Contractor tender bids and compliance evaluation records",
+      "type": "object",
+      "properties": {
+        "tenderRef": { "type": "string" },
+        "contractorName": { "type": "string" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "userId": { "type": "string" }
+      },
+      "required": ["tenderRef", "contractorName", "status", "userId"]
+    },
+    "affidavits": {
+      "title": "Affidavits",
+      "description": "Generated judicial stamp paper affidavits",
+      "type": "object",
+      "properties": {
+        "tenderRef": { "type": "string" },
+        "affidavitType": { "type": "string" },
+        "firmName": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "userId": { "type": "string" }
+      },
+      "required": ["tenderRef", "affidavitType", "firmName", "userId"]
+    }
+  }
+}

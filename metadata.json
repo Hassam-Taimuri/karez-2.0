@@ -1,0 +1,6 @@
+{
+  "name": "Karez 2.0",
+  "description": "AI-native procurement compliance & disqualification prevention platform for Pakistani construction tenders (NHA, LDA, C&W, WAPDA) bound by PPRA Rules 2004.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

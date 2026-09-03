@@ -1,0 +1,72 @@
+@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+:root {
+  --pak-green: #00401A;
+  --pak-green-dark: #002D12;
+  --pak-green-light: #005B25;
+  --pak-green-soft: #E6F2EB;
+}
+
+body {
+  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background-color: #F6F9F6;
+  color: #111913;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+code, kbd, samp, pre {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* Custom Scrollbars for High Density Govdash Feel */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #F1F5F2;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #C4D7C8;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #00401A;
+}
+
+/* Print Optimization Media Queries */
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  .print\:hidden {
+    display: none !important;
+  }
+
+  /* Reset modal positioning and clipping for full-page multi-page printing */
+  .fixed {
+    position: static !important;
+    background: transparent !important;
+    padding: 0 !important;
+  }
+
+  .max-h-\[90vh\], .overflow-y-auto, .overflow-hidden {
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  .shadow-2xl, .shadow-xl, .shadow-sm {
+    box-shadow: none !important;
+  }
+
+  .rounded-2xl, .rounded-xl {
+    border-radius: 0 !important;
+  }
+}
