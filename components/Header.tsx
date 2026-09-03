@@ -70,6 +70,7 @@ export function Header({
   clientSwitcher,
 }: HeaderProps) {
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [isSamplesOpen, setIsSamplesOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
   const isQualified = currentBidder.companyName.includes('Habib') || currentBidder.companyName.includes('Frontier');
 
@@ -294,6 +295,63 @@ export function Header({
           </div>
 
           {/* Primary Action Buttons (Always Visible) */}
+          {/* Load Sample Tender Dropdown */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setIsSamplesOpen(!isSamplesOpen)}
+              className="bg-[#002D12] hover:bg-[#005B25] text-white text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-emerald-700/60 flex items-center gap-1.5 transition-colors shadow-xs cursor-pointer"
+              title="Load an annotated sample tender for demo"
+            >
+              <FileText className="w-3.5 h-3.5 text-emerald-300" />
+              <span className="hidden sm:inline">Load Sample</span>
+              <ChevronDown className="w-3 h-3 text-emerald-400 opacity-80" />
+            </button>
+
+            {isSamplesOpen && (
+              <div className="absolute right-0 top-full mt-2 w-80 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-2.5 z-50 text-slate-200">
+                <div className="pb-2 mb-2 border-b border-slate-800 px-1">
+                  <span className="font-bold text-xs text-emerald-400 tracking-wide uppercase">
+                    Annotated Sample Tenders
+                  </span>
+                </div>
+                <div className="space-y-1.5">
+                  {SAMPLE_TENDERS.map((sample) => (
+                    <button
+                      key={sample.id}
+                      onClick={() => {
+                        onSelectTender(sample);
+                        setIsSamplesOpen(false);
+                      }}
+                      className="w-full text-left p-2 rounded-lg bg-slate-950/80 hover:bg-slate-800 border border-slate-800/80 hover:border-emerald-700/50 transition-all cursor-pointer group"
+                    >
+                      <div className="font-medium text-xs text-slate-200 group-hover:text-emerald-300 truncate">
+                        {sample.title}
+                      </div>
+                      <div className="text-[10px] text-slate-400 truncate mt-0.5">
+                        {sample.agency} • {sample.estimatedCost}
+                      </div>
+                    </button>
+                  ))}
+                  <button
+                    onClick={() => {
+                      onSelectBidder(UNDERQUALIFIED_BIDDER_TEST_PROFILE);
+                      setIsSamplesOpen(false);
+                    }}
+                    className="w-full text-left p-2 rounded-lg bg-rose-950/40 hover:bg-rose-900/40 border border-rose-900/60 hover:border-rose-700/60 transition-all cursor-pointer group"
+                  >
+                    <div className="font-medium text-xs text-rose-200 group-hover:text-rose-100">
+                      Switch to under-qualified bidder profile
+                    </div>
+                    <div className="text-[10px] text-rose-300/70 mt-0.5">
+                      Demo: triggers live disqualification detection
+                    </div>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Upload Scan PDF */}
           <label className="cursor-pointer bg-[#002D12] hover:bg-[#005B25] text-white text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-emerald-700/60 flex items-center gap-1.5 transition-colors shadow-xs">
             <Upload className="w-3.5 h-3.5 text-emerald-300" />
