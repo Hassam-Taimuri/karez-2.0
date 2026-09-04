@@ -43,6 +43,19 @@ export async function getTendersByUser(userId: string): Promise<any[]> {
   return tenders;
 }
 
+/**
+ * Store the person behind the account (name + email), owner-scoped.
+ * merge:true so a re-register or profile edit never wipes existing fields.
+ */
+export async function saveUserRecord(userId: string, name: string, email: string): Promise<void> {
+  const ref = doc(db, 'users', userId);
+  await setDoc(
+    ref,
+    { userId, name, email, updatedAt: new Date().toISOString() },
+    { merge: true }
+  );
+}
+
 export async function saveBidderProfile(userId: string, profile: object): Promise<void> {
   const profileRef = doc(db, 'bidderProfiles', userId);
   await setDoc(profileRef, {

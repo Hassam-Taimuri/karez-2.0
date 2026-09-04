@@ -8,15 +8,17 @@ import {
   createUserWithEmailAndPassword,
   signInWithPopup,
   sendPasswordResetEmail,
+  updateProfile,
   signOut,
 } from 'firebase/auth';
 import { auth, googleProvider } from '../lib/firebase';
+import { saveUserRecord } from '../lib/firestoreService';
 
 interface AuthContextType {
   user: User | null;
   loading: boolean;
   login: (email: string, pass: string) => Promise<void>;
-  register: (email: string, pass: string) => Promise<void>;
+  register: (name: string, email: string, pass: string) => Promise<void>;
   loginWithGoogle: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -41,8 +43,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await signInWithEmailAndPassword(auth, email, pass);
   };
 
-  const register = async (email: string, pass: string) => {
-    await createUserWithEmailAndPassword(auth, email, pass);
+  const register = async (name: string, email: string, pass: string) => {
+    const cred = await createUserWithEmailAndPassword(auth, email, pass);
+    // Persist the person's name on the Firebase user so the header can always
+    // show who is logged in, and mirror it into a users/{uid} record.
+    await updateProfile(cred.user, { displayName: name });
+    try {
+      await saveUserRecord(cred.user.uid, name, email);
+    } catch {
+      // Non-fatal: displayName is already set on the auth user.
+    }
+    setUser(auth.currentUser);
   };
 
   const loginWithGoogle = async () => {

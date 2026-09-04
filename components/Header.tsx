@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { SampleTenderDoc, BidderProfile, AuditReport } from '../lib/types';
 import { SAMPLE_TENDERS, UNDERQUALIFIED_BIDDER_TEST_PROFILE } from '../lib/sample_tenders';
+import { useAuth } from '../contexts/AuthContext';
 
 interface HeaderProps {
   currentTender: SampleTenderDoc | null;
@@ -69,8 +70,14 @@ export function Header({
   onToggleLanguage,
   clientSwitcher,
 }: HeaderProps) {
+  const { user } = useAuth();
+  const accountName = user?.displayName || 'Account';
+  const accountEmail = user?.email || '';
+  const accountInitial = (user?.displayName || user?.email || '?').charAt(0).toUpperCase();
+
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isSamplesOpen, setIsSamplesOpen] = useState(false);
+  const [isAccountOpen, setIsAccountOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
   const isQualified = currentBidder.companyName.includes('Habib') || currentBidder.companyName.includes('Frontier');
 
@@ -397,16 +404,55 @@ export function Header({
             <span>Report</span>
           </button>
 
-          {/* Logout Button */}
-          {onLogout && (
-            <button
-              onClick={onLogout}
-              className="bg-[#002D12] hover:bg-red-900/80 text-emerald-100 hover:text-red-100 border border-emerald-700/60 hover:border-red-600/80 text-xs font-semibold px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
-              title="Sign Out / Logout"
-            >
-              <LogOut className="w-3.5 h-3.5 text-emerald-300 hover:text-red-300" />
-              <span className="hidden sm:inline">Logout</span>
-            </button>
+          {/* Account Menu — shows WHO is logged in (person, not the client company) */}
+          {user && (
+            <div className="relative">
+              <button
+                onClick={() => setIsAccountOpen((v) => !v)}
+                className="bg-[#002D12] hover:bg-[#005B25] text-emerald-100 border border-emerald-700/60 text-xs font-semibold pl-1.5 pr-2 py-1 rounded-lg flex items-center gap-2 transition-all cursor-pointer shadow-xs"
+                title={`Signed in as ${accountName}${accountEmail ? ` (${accountEmail})` : ''}`}
+              >
+                <span className="w-6 h-6 rounded-full bg-emerald-500 text-[#00401A] font-black flex items-center justify-center text-xs shrink-0">
+                  {accountInitial}
+                </span>
+                <span className="hidden md:flex flex-col items-start leading-tight max-w-[130px]">
+                  <span className="font-bold text-white truncate max-w-[130px]">{accountName}</span>
+                  {accountEmail && (
+                    <span className="text-[9px] text-emerald-200/70 truncate max-w-[130px]">{accountEmail}</span>
+                  )}
+                </span>
+                <ChevronDown className="w-3 h-3 text-emerald-300 opacity-80 shrink-0" />
+              </button>
+
+              {isAccountOpen && (
+                <div className="absolute right-0 top-full mt-2 w-64 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-3 z-50 text-slate-200">
+                  <div className="flex items-center gap-2.5 pb-3 mb-2 border-b border-slate-800">
+                    <span className="w-9 h-9 rounded-full bg-emerald-500 text-[#00401A] font-black flex items-center justify-center text-sm shrink-0">
+                      {accountInitial}
+                    </span>
+                    <div className="min-w-0">
+                      <div className="font-bold text-white text-sm truncate">{accountName}</div>
+                      <div className="text-[11px] text-slate-400 truncate">{accountEmail}</div>
+                    </div>
+                  </div>
+                  <div className="text-[10px] text-slate-500 uppercase tracking-wider px-1 pb-1">
+                    Signed-in account
+                  </div>
+                  {onLogout && (
+                    <button
+                      onClick={() => {
+                        setIsAccountOpen(false);
+                        onLogout();
+                      }}
+                      className="w-full mt-1 text-left px-3 py-2 rounded-lg bg-slate-950/80 hover:bg-red-900/40 text-slate-200 hover:text-red-200 border border-slate-800 hover:border-red-700/60 flex items-center gap-2 text-xs font-semibold transition-all cursor-pointer"
+                    >
+                      <LogOut className="w-3.5 h-3.5" />
+                      <span>Sign out</span>
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
           )}
 
           {/* More Button (Mobile Only) */}
