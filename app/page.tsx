@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { Loader2, TriangleAlert, X, UploadCloud } from 'lucide-react';
+import { Loader2, TriangleAlert, X, UploadCloud, Building2, FileText, CheckCircle2, ArrowRight } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import { saveTenderAnalysis, saveBidderProfile, getBidderProfile, getTendersByUser, createCompany, getCompaniesByUser, updateCompany, deleteCompany, saveTenderToCompany, getTendersByCompany } from '../lib/firestoreService';
@@ -406,6 +406,53 @@ export default function Home() {
     setCurrentBidder(bidder);
   };
 
+  // Reopen a previously analysed tender from the history dropdown. Only tenders
+  // saved with their full extraction can be reopened; older metadata-only
+  // records return false so the UI can tell the user.
+  const handleOpenSavedTender = (item: any): boolean => {
+    const data = item?.extractedData;
+    if (!data) return false;
+    const reopened: SampleTenderDoc = {
+      id: item.id || `saved-${Date.now()}`,
+      title: data.basicInfo?.tenderTitle || item.tenderTitle || 'Saved Tender',
+      agency: data.basicInfo?.procuringAgency || item.procuringAgency,
+      biddingType: data.basicInfo?.biddingType,
+      ppraRef: data.basicInfo?.tenderId || item.tenderId,
+      deadline: data.basicInfo?.submissionDeadline,
+      estimatedCost: data.basicInfo?.estimatedCostPKR
+        ? formatPKR(data.basicInfo.estimatedCostPKR)
+        : 'Not stated on pages analysed',
+      pages: [
+        {
+          pageNumber: 1,
+          title: data.documentFileName || 'Tender document',
+          imageUrl: '',
+          extractedClauses: [
+            data.pecRequirement?.clauseText && {
+              id: 'saved-clause-1',
+              title: 'PEC Category & Specialization Requirements',
+              text: data.pecRequirement.clauseText,
+              category: 'pecLicensing' as const,
+              confidence: data.pecRequirement.confidenceScore,
+            },
+            data.financialCriteria?.clauseText && {
+              id: 'saved-clause-2',
+              title: 'Financial Turnover & CDR Bid Security',
+              text: data.financialCriteria.clauseText,
+              category: 'financials' as const,
+              confidence: data.financialCriteria.confidenceScore,
+            },
+          ].filter(Boolean) as any[],
+        },
+      ],
+      extractedData: data,
+      defaultBidderProfile: currentBidder,
+    };
+    setCurrentTender(reopened);
+    setCurrentPage(1);
+    return true;
+  };
+
   const handleJumpToPage = (page: number, clauseId?: string) => {
     setCurrentPage(page);
     if (clauseId) setHighlightedClauseId(clauseId);
@@ -555,6 +602,9 @@ export default function Home() {
             estimatedCostPKR: normalizedData.basicInfo.estimatedCostPKR ?? null,
             submissionDeadline: normalizedData.basicInfo.submissionDeadline,
             fileName: file.name,
+            // Persist the full extraction (small JSON) so this tender can be
+            // reopened later from the history dropdown and re-audited.
+            extractedData: normalizedData,
           });
           const updatedTenders = await getTendersByCompany(user.uid, currentCompanyId || 'default');
           setSavedTenders(updatedTenders);
@@ -608,6 +658,7 @@ export default function Home() {
         isAnalyzing={isAnalyzing}
         auditReport={auditReport}
         savedTenders={savedTenders}
+        onOpenSavedTender={handleOpenSavedTender}
         onDraftProposal={() => setIsProposalModalOpen(true)}
         language={language}
         onToggleLanguage={() => setLanguage(prev => prev === 'en' ? 'ur' : 'en')}
@@ -620,33 +671,94 @@ export default function Home() {
       {/* Main Split-Screen High Density Dashboard Layout */}
       <main className="flex flex-col flex-1 overflow-auto min-h-0 p-3 sm:p-4 w-full max-w-[1920px] mx-auto">
         {!currentTender ? (
-          <div className="flex-1 bg-gray-900 border border-gray-800 rounded-2xl p-8 sm:p-12 flex flex-col items-center justify-center text-center my-auto w-full min-h-[500px]">
-            <div className="w-20 h-20 rounded-full bg-emerald-950/80 border border-emerald-800/60 flex items-center justify-center mb-6 shadow-lg">
-              <UploadCloud className="w-16 h-16 text-emerald-400" />
-            </div>
-            <h2 className="text-2xl font-bold text-white mb-3 tracking-tight">
-              Upload a Tender to Begin
-            </h2>
-            <p className="text-gray-400 text-sm max-w-md mx-auto mb-8 leading-relaxed">
-              Upload any NHA, LDA, C&W or PPRA tender PDF to instantly generate a compliance audit and technical proposal draft.
-            </p>
-            <label className="cursor-pointer bg-[#002D12] hover:bg-[#005B25] active:bg-[#002D12] text-white font-bold text-sm px-6 py-3 rounded-xl border border-emerald-700/60 shadow-lg flex items-center justify-center gap-2 transition-all transform hover:scale-[1.02] active:scale-[0.98]">
-              <UploadCloud className="w-5 h-5 text-emerald-300" />
-              <span>Upload Tender PDF</span>
-              <input
-                type="file"
-                accept="application/pdf,image/*"
-                onChange={(e) => {
-                  handleCustomFileUpload(e);
-                  e.target.value = '';
-                }}
-                className="hidden"
-                disabled={isAnalyzing}
-              />
-            </label>
-            <p className="text-gray-500 text-xs mt-4 font-medium">
-              Supports scanned and digital PDFs up to 20MB
-            </p>
+          <div className="flex-1 flex flex-col items-center justify-center my-auto w-full min-h-[500px] py-8">
+            {(() => {
+              const profileReady = !!currentBidder.companyName;
+              return (
+                <div className="w-full max-w-4xl mx-auto">
+                  <div className="text-center mb-8">
+                    <h2 className="text-2xl font-bold text-white mb-2 tracking-tight">
+                      {profileReady ? `Welcome back, ${currentBidder.companyName}` : 'Welcome to Karez 2.0'}
+                    </h2>
+                    <p className="text-gray-400 text-sm max-w-xl mx-auto leading-relaxed">
+                      {profileReady
+                        ? 'Choose what you want to do next — load a sample tender, upload your own, or update your company profile.'
+                        : 'Start by setting up your company profile, then load a sample tender or upload your own to run a PPRA compliance audit.'}
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {/* Step 1 — Company profile */}
+                    <button
+                      onClick={() => setIsBidderModalOpen(true)}
+                      className={`text-left bg-gray-900 border rounded-2xl p-5 transition-all hover:scale-[1.02] cursor-pointer ${
+                        profileReady ? 'border-gray-800 hover:border-emerald-700/60' : 'border-emerald-600/70 ring-1 ring-emerald-600/30'
+                      }`}
+                    >
+                      <div className="w-11 h-11 rounded-xl bg-emerald-950/80 border border-emerald-800/60 flex items-center justify-center mb-3">
+                        <Building2 className="w-6 h-6 text-emerald-400" />
+                      </div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400">Step 1</span>
+                        {profileReady && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />}
+                      </div>
+                      <h3 className="text-white font-bold text-sm mb-1">
+                        {profileReady ? 'Edit company profile' : 'Set up your company profile'}
+                      </h3>
+                      <p className="text-gray-400 text-xs leading-relaxed">
+                        {profileReady
+                          ? `${currentBidder.companyName} — update PEC category, turnover, CDR, affidavits.`
+                          : 'Enter your firm’s PEC category, turnover, CDR and affidavits. Nothing is assumed on your behalf.'}
+                      </p>
+                    </button>
+
+                    {/* Step 2 — Load a sample */}
+                    <button
+                      onClick={() => handleSelectTender(SAMPLE_TENDERS[0])}
+                      className="text-left bg-gray-900 border border-gray-800 hover:border-emerald-700/60 rounded-2xl p-5 transition-all hover:scale-[1.02] cursor-pointer"
+                    >
+                      <div className="w-11 h-11 rounded-xl bg-emerald-950/80 border border-emerald-800/60 flex items-center justify-center mb-3">
+                        <FileText className="w-6 h-6 text-emerald-400" />
+                      </div>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400 block mb-1">Step 2 · Try it</span>
+                      <h3 className="text-white font-bold text-sm mb-1">Load a sample tender</h3>
+                      <p className="text-gray-400 text-xs leading-relaxed">
+                        Open the annotated NHA E-35 highway tender. Pick others from &quot;Load Sample&quot; in the header.
+                      </p>
+                    </button>
+
+                    {/* Step 2 alt — Upload your own */}
+                    <label className="text-left bg-gray-900 border border-gray-800 hover:border-emerald-700/60 rounded-2xl p-5 transition-all hover:scale-[1.02] cursor-pointer block">
+                      <div className="w-11 h-11 rounded-xl bg-emerald-950/80 border border-emerald-800/60 flex items-center justify-center mb-3">
+                        <UploadCloud className="w-6 h-6 text-emerald-400" />
+                      </div>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400 block mb-1">Step 2 · Real bid</span>
+                      <h3 className="text-white font-bold text-sm mb-1">Upload your tender</h3>
+                      <p className="text-gray-400 text-xs leading-relaxed">
+                        Any NHA, LDA, C&amp;W or PPRA tender PDF or scan (up to 20MB). Every page is analysed.
+                      </p>
+                      <input
+                        type="file"
+                        accept="application/pdf,image/*"
+                        onChange={(e) => {
+                          handleCustomFileUpload(e);
+                          e.target.value = '';
+                        }}
+                        className="hidden"
+                        disabled={isAnalyzing}
+                      />
+                    </label>
+                  </div>
+
+                  {!profileReady && (
+                    <div className="mt-6 flex items-center justify-center gap-2 text-xs text-emerald-300/80">
+                      <ArrowRight className="w-3.5 h-3.5" />
+                      <span>Recommended: set up your company profile first so audits compare against your real credentials.</span>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         ) : (
           <div className="flex flex-col lg:flex-row gap-4 flex-1 overflow-hidden">

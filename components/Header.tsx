@@ -41,6 +41,7 @@ interface HeaderProps {
   auditReport?: AuditReport | null;
   onLogout?: () => void;
   savedTenders?: any[];
+  onOpenSavedTender?: (item: any) => boolean;
   onDraftProposal?: () => void;
   language?: 'en' | 'ur';
   onToggleLanguage?: () => void;
@@ -65,6 +66,7 @@ export function Header({
   auditReport,
   onLogout,
   savedTenders = [],
+  onOpenSavedTender,
   onDraftProposal,
   language = 'en',
   onToggleLanguage,
@@ -79,7 +81,6 @@ export function Header({
   const [isSamplesOpen, setIsSamplesOpen] = useState(false);
   const [isAccountOpen, setIsAccountOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
-  const isQualified = currentBidder.companyName.includes('Habib') || currentBidder.companyName.includes('Frontier');
 
   // Compute Compliance Percentage & Circular Progress Ring
   const successCount = auditReport
@@ -258,10 +259,18 @@ export function Header({
                         <button
                           key={item.id || idx}
                           onClick={() => {
-                            alert(`Tender: ${item.tenderTitle || 'Untitled Tender'}\nAgency: ${item.procuringAgency || 'N/A'}`);
-                            setIsHistoryOpen(false);
+                            const reopened = onOpenSavedTender ? onOpenSavedTender(item) : false;
+                            if (reopened) {
+                              setIsHistoryOpen(false);
+                            }
                           }}
-                          className="w-full text-left p-2 rounded-lg bg-slate-950/80 hover:bg-slate-800 border border-slate-800/80 hover:border-emerald-700/50 transition-all cursor-pointer group"
+                          disabled={!item.extractedData}
+                          title={item.extractedData ? 'Reopen this tender audit' : 'Saved before full audits were stored — re-upload to analyse'}
+                          className={`w-full text-left p-2 rounded-lg bg-slate-950/80 border border-slate-800/80 transition-all group ${
+                            item.extractedData
+                              ? 'hover:bg-slate-800 hover:border-emerald-700/50 cursor-pointer'
+                              : 'opacity-60 cursor-not-allowed'
+                          }`}
                         >
                           <div className="font-medium text-xs text-slate-200 group-hover:text-emerald-300 truncate">
                             {item.tenderTitle || 'Untitled Tender Analysis'}
@@ -271,15 +280,22 @@ export function Header({
                               {item.procuringAgency}
                             </div>
                           )}
-                          {item.createdAt && (
-                            <div className="text-[9px] text-slate-500 mt-0.5">
-                              {new Date(item.createdAt).toLocaleDateString(undefined, {
-                                month: 'short',
-                                day: 'numeric',
-                                year: 'numeric',
-                              })}
-                            </div>
-                          )}
+                          <div className="flex items-center justify-between mt-0.5">
+                            {item.createdAt && (
+                              <div className="text-[9px] text-slate-500">
+                                {new Date(item.createdAt).toLocaleDateString(undefined, {
+                                  month: 'short',
+                                  day: 'numeric',
+                                  year: 'numeric',
+                                })}
+                              </div>
+                            )}
+                            {item.extractedData ? (
+                              <span className="text-[9px] text-emerald-400 font-semibold">Reopen →</span>
+                            ) : (
+                              <span className="text-[9px] text-slate-500">metadata only</span>
+                            )}
+                          </div>
                         </button>
                       ))}
                     </div>

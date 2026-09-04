@@ -34,16 +34,31 @@ export function AffidavitGeneratorModal({
   const [stampPaperDenomination, setStampPaperDenomination] = useState<number>(500);
   const [copied, setCopied] = useState<boolean>(false);
 
-  // Editable fields for contractor customization
-  const [firmName, setFirmName] = useState<string>(bidder?.companyName || 'M/s Contractor');
-  const [pecNo, setPecNo] = useState<string>(bidder?.pecLicenseNo || 'PEC-CIVIL-19482');
-  const [ntnNo, setNtnNo] = useState<string>(bidder?.ntnNo || '4029184-7');
-  const [address, setAddress] = useState<string>('Plot # 45, Sector I-9/2, Industrial Area, Islamabad, Pakistan');
-  const [signatoryName, setSignatoryName] = useState<string>('Engr. Muhammad Tariq Khan');
-  const [signatoryDesignation, setSignatoryDesignation] = useState<string>('Chief Executive Officer / Managing Director');
-  const [cnicNo, setCnicNo] = useState<string>('37405-1829304-1');
+  // Editable fields — pre-filled from the bidder's real profile where known,
+  // otherwise left blank. Nothing is invented (no fake CNIC / NTN / names).
+  const [firmName, setFirmName] = useState<string>(bidder?.companyName || '');
+  const [pecNo, setPecNo] = useState<string>(bidder?.pecLicenseNo || '');
+  const [ntnNo, setNtnNo] = useState<string>(bidder?.fbrRegistrationNumber || bidder?.ntnNo || '');
+  const [address, setAddress] = useState<string>('');
+  const [signatoryName, setSignatoryName] = useState<string>('');
+  const [signatoryDesignation, setSignatoryDesignation] = useState<string>('');
+  const [cnicNo, setCnicNo] = useState<string>('');
 
   if (!isOpen) return null;
+
+  // Fill unset fields with an explicit placeholder so the drafter never emits a
+  // fabricated legal value — the user must complete each [INSERT: …] before use.
+  const ins = (val: string, label: string) => (val.trim() ? val.trim() : `[INSERT: ${label}]`);
+  const firm = ins(firmName, 'firm name');
+  const pec = ins(pecNo, 'PEC licence no.');
+  const ntn = ins(ntnNo, 'FBR NTN');
+  const addr = ins(address, 'registered office address');
+  const signer = ins(signatoryName, 'authorised signatory name');
+  const desig = ins(signatoryDesignation, 'designation');
+  const cnic = ins(cnicNo, 'CNIC no.');
+  const turnoverM = bidder?.avgAnnualTurnoverPKR
+    ? (bidder.avgAnnualTurnoverPKR / 1000000).toFixed(1)
+    : '[INSERT: audited turnover]';
 
   const ppraRef = tender?.ppraRef || tender?.extractedData?.basicInfo?.ppraReferenceNo || 'N/A';
   const tenderTitle = tender?.title || tender?.extractedData?.basicInfo?.tenderTitle || 'Tender Project';
@@ -65,9 +80,9 @@ BEFORE THE EVALUATION COMMITTEE / PROCURING AGENCY
 Reference Tender: ${ppraRef} - ${tenderTitle}
 Procuring Agency: ${procuringAgency}
 
-I, ${signatoryName}, CNIC No. ${cnicNo}, in my capacity as ${signatoryDesignation} of M/s ${firmName}, having registered office at ${address}, holding valid PEC License No. ${pecNo} and FBR NTN No. ${ntnNo}, do hereby solemnly affirm, declare and state on oath as under:
+I, ${signer}, CNIC No. ${cnic}, in my capacity as ${desig} of M/s ${firm}, having registered office at ${addr}, holding valid PEC License No. ${pec} and FBR NTN No. ${ntn}, do hereby solemnly affirm, declare and state on oath as under:
 
-1. That M/s ${firmName} has never been blacklisted, debarred, suspended, or declared ineligible by the Federal Government of Pakistan, any Provincial Government (KPPRA, SPPRA, BPPRA, Punjab PPRA), Autonomous Body, NHA, LDA, C&W, WAPDA, or any International Financial Institution (World Bank, ADB).
+1. That M/s ${firm} has never been blacklisted, debarred, suspended, or declared ineligible by the Federal Government of Pakistan, any Provincial Government (KPPRA, SPPRA, BPPRA, Punjab PPRA), Autonomous Body, NHA, LDA, C&W, WAPDA, or any International Financial Institution (World Bank, ADB).
 
 2. That our firm has not failed to perform on any contract in the last five (05) years, nor has any contract awarded to our firm been terminated due to default or breach of contractual obligations under PPRA Rules 2004.
 
@@ -79,10 +94,10 @@ I, ${signatoryName}, CNIC No. ${cnicNo}, in my capacity as ${signatoryDesignatio
 
 DEPONENT:
 __________________________________
-Signature: ${signatoryName}
-Designation: ${signatoryDesignation}
-M/s ${firmName}
-PEC Registration: ${pecNo}
+Signature: ${signer}
+Designation: ${desig}
+M/s ${firm}
+PEC Registration: ${pec}
 
 VERIFICATION:
 Verified on Oath at Islamabad/Lahore this ${todayStr} that the contents of paragraphs 1 to 5 above are true and correct to the best of my knowledge and belief and nothing has been concealed therefrom.
@@ -99,20 +114,20 @@ Tender Reference: ${ppraRef}
 Name of Work: ${tenderTitle}
 Procuring Authority: ${procuringAgency}
 
-I, ${signatoryName}, CNIC No. ${cnicNo}, ${signatoryDesignation} of M/s ${firmName}, do hereby state on solemn affirmation as under:
+I, ${signer}, CNIC No. ${cnic}, ${desig} of M/s ${firm}, do hereby state on solemn affirmation as under:
 
-1. I am the authorized representative of M/s ${firmName} and competent to execute this affidavit on behalf of the firm.
+1. I am the authorized representative of M/s ${firm} and competent to execute this affidavit on behalf of the firm.
 
 2. All financial statements, 3-year turnover certificates issued by Chartered Accountants, bank statements, client performance certificates, and PEC registration renewal certificates submitted in Envelope A (Technical Proposal) are authentic copies of original records.
 
-3. The 3-year average annual construction turnover of PKR ${bidder?.avgAnnualTurnoverPKR ? (bidder.avgAnnualTurnoverPKR / 1000000).toFixed(1) : '350'} Million presented in our financial qualification dossier represents actual audited revenues reported to FBR.
+3. The 3-year average annual construction turnover of PKR ${turnoverM} Million presented in our financial qualification dossier represents actual audited revenues reported to FBR.
 
 4. We explicitly authorize ${procuringAgency} or its technical evaluation team to verify any certificate, bank statement, or client reference directly with the issuing authorities without prior notice.
 
 DEPONENT:
 __________________________________
-${signatoryName} (${signatoryDesignation})
-M/s ${firmName}
+${signer} (${desig})
+M/s ${firm}
 Date: ${todayStr}`;
 
       case 'no_litigation':
@@ -122,7 +137,7 @@ Date: ${todayStr}`;
 Tender Notice: ${tenderTitle} (PPRA Ref: ${ppraRef})
 Procuring Department: ${procuringAgency}
 
-We, M/s ${firmName}, PEC License No. ${pecNo}, hereby declare that:
+We, M/s ${firm}, PEC License No. ${pec}, hereby declare that:
 
 1. Our firm is not currently involved in any active litigation, arbitration, or dispute with ${procuringAgency} or any government procurement entity in Pakistan that would impair our capacity to execute this project.
 
@@ -132,17 +147,17 @@ We, M/s ${firmName}, PEC License No. ${pecNo}, hereby declare that:
 
 DEPONENT:
 __________________________________
-Authorized Signatory: ${signatoryName}
-M/s ${firmName}
+Authorized Signatory: ${signer}
+M/s ${firm}
 Date: ${todayStr}`;
 
       case 'power_of_attorney':
         return `SPECIAL POWER OF ATTORNEY FOR BIDDING & CONTRACT EXECUTION
 (On Judicial Stamp Paper of Rs. 1,000/- Duly Registered / Attested)
 
-KNOW ALL MEN BY THESE PRESENTS that we, the Partners / Board of Directors of M/s ${firmName}, having registered office at ${address}, do hereby nominate, appoint and constitute:
+KNOW ALL MEN BY THESE PRESENTS that we, the Partners / Board of Directors of M/s ${firm}, having registered office at ${addr}, do hereby nominate, appoint and constitute:
 
-Mr. ${signatoryName}, CNIC No. ${cnicNo}, as our true and lawful Attorney for us and in our name and on our behalf to do all or any of the following acts, deeds, matters and things in connection with Tender Ref: "${tender.ppraRef}":
+Mr. ${signer}, CNIC No. ${cnic}, as our true and lawful Attorney for us and in our name and on our behalf to do all or any of the following acts, deeds, matters and things in connection with Tender Ref: "${tender.ppraRef}":
 
 1. To sign, seal, submit and deliver the Technical and Financial Bids to ${tender.agency}.
 2. To represent the firm in all pre-bid meetings, clarification sessions, and financial bid openings.
@@ -156,7 +171,7 @@ EXECUTANT(S):
 
 ATTORNEY ACCEPTANCE:
 I accept: ______________________
-(${signatoryName}, CNIC: ${cnicNo})
+(${signer}, CNIC: ${cnic})
 
 WITNESSES:
 1. Name & CNIC: __________________________
@@ -170,17 +185,17 @@ Contract Value / Estimated Cost: ${tender.estimatedCost}
 Tender Title: ${tender.title}
 Procuring Agency: ${tender.agency}
 
-M/s ${firmName} hereby declares that it has not obtained or induced the procurement of any contract, right, interest, privilege or other obligation or benefit from Government of Pakistan or any administrative subdivision or agency thereof through any corrupt business practice.
+M/s ${firm} hereby declares that it has not obtained or induced the procurement of any contract, right, interest, privilege or other obligation or benefit from Government of Pakistan or any administrative subdivision or agency thereof through any corrupt business practice.
 
-Without limiting the generality of the foregoing, M/s ${firmName} represents and warrants that it has fully declared the brokerage, commission, fees etc. paid or payable to anyone and not given or agreed to give and shall not give or agree to give to anyone within or outside Pakistan either directly or indirectly through any natural or juridical person, including its affiliate, agent, associate, broker, consultant, director, promoter, shareholder, sponsor or subsidiary, any commission, gratification, bribe, finder's fee or kickback.
+Without limiting the generality of the foregoing, M/s ${firm} represents and warrants that it has fully declared the brokerage, commission, fees etc. paid or payable to anyone and not given or agreed to give and shall not give or agree to give to anyone within or outside Pakistan either directly or indirectly through any natural or juridical person, including its affiliate, agent, associate, broker, consultant, director, promoter, shareholder, sponsor or subsidiary, any commission, gratification, bribe, finder's fee or kickback.
 
-M/s ${firmName} certifies that it has made and will make full disclosure of all agreements and arrangements with all persons in respect of or related to the transaction with ${tender.agency}.
+M/s ${firm} certifies that it has made and will make full disclosure of all agreements and arrangements with all persons in respect of or related to the transaction with ${tender.agency}.
 
-FOR M/S ${firmName}:
+FOR M/S ${firm}:
 __________________________________
-Name: ${signatoryName}
-Title: ${signatoryDesignation}
-PEC No: ${pecNo}`;
+Name: ${signer}
+Title: ${desig}
+PEC No: ${pec}`;
 
       default:
         return '';
@@ -201,7 +216,7 @@ PEC No: ${pecNo}`;
       printWin.document.write(`<!DOCTYPE html>
 <html>
 <head>
-  <title>Affidavit Draft - ${selectedType.toUpperCase()} - M/s ${firmName}</title>
+  <title>Affidavit Draft - ${selectedType.toUpperCase()} - M/s ${firm}</title>
   <style>
     body { font-family: 'Courier New', Courier, monospace; font-size: 11pt; line-height: 1.6; padding: 40px; margin: 0; }
     .stamp-space { height: 180px; border: 2px dashed #94a3b8; text-align: center; color: #94a3b8; font-weight: bold; margin-bottom: 30px; display: flex; align-items: center; justify-content: center; background: #f8fafc; }
@@ -326,12 +341,18 @@ PEC No: ${pecNo}`;
                 <span>Contractor Firm & Signatory Details</span>
               </div>
 
+              <p className="text-[10px] text-slate-500 leading-relaxed">
+                Pre-filled from your company profile where known. Blank fields appear as
+                <span className="font-mono text-slate-600"> [INSERT: …]</span> in the draft — fill them before use.
+              </p>
+
               <div>
                 <label className="block text-[11px] font-bold text-slate-600 mb-1">Company / Firm Name</label>
                 <input
                   type="text"
                   value={firmName}
                   onChange={(e) => setFirmName(e.target.value)}
+                  placeholder="e.g. M/s Your Construction Co."
                   className="w-full text-xs font-semibold px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg focus:outline-none focus:border-[#00401A]"
                 />
               </div>
@@ -343,6 +364,7 @@ PEC No: ${pecNo}`;
                     type="text"
                     value={pecNo}
                     onChange={(e) => setPecNo(e.target.value)}
+                    placeholder="PEC licence no."
                     className="w-full text-xs font-semibold px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg focus:outline-none focus:border-[#00401A]"
                   />
                 </div>
@@ -352,6 +374,7 @@ PEC No: ${pecNo}`;
                     type="text"
                     value={ntnNo}
                     onChange={(e) => setNtnNo(e.target.value)}
+                    placeholder="FBR NTN"
                     className="w-full text-xs font-semibold px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg focus:outline-none focus:border-[#00401A]"
                   />
                 </div>
@@ -364,6 +387,7 @@ PEC No: ${pecNo}`;
                     type="text"
                     value={signatoryName}
                     onChange={(e) => setSignatoryName(e.target.value)}
+                    placeholder="Authorised signatory"
                     className="w-full text-xs font-semibold px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg focus:outline-none focus:border-[#00401A]"
                   />
                 </div>
@@ -373,9 +397,32 @@ PEC No: ${pecNo}`;
                     type="text"
                     value={cnicNo}
                     onChange={(e) => setCnicNo(e.target.value)}
+                    placeholder="XXXXX-XXXXXXX-X"
                     className="w-full text-xs font-semibold px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg focus:outline-none focus:border-[#00401A]"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-600 mb-1">Signatory Designation</label>
+                <input
+                  type="text"
+                  value={signatoryDesignation}
+                  onChange={(e) => setSignatoryDesignation(e.target.value)}
+                  placeholder="e.g. Chief Executive / Managing Director"
+                  className="w-full text-xs font-semibold px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg focus:outline-none focus:border-[#00401A]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-600 mb-1">Registered Office Address</label>
+                <input
+                  type="text"
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  placeholder="Firm's registered office address"
+                  className="w-full text-xs font-semibold px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg focus:outline-none focus:border-[#00401A]"
+                />
               </div>
 
               <div>
