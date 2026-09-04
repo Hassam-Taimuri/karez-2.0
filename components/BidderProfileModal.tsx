@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Sliders, X, Check, RefreshCw, Building2, ShieldAlert } from 'lucide-react';
 import { BidderProfile, PECCategory } from '../lib/types';
 import { formatPKR, MAX_PLAUSIBLE_TURNOVER_PKR, MAX_PLAUSIBLE_CDR_PKR } from '../lib/compliance_engine';
@@ -20,6 +20,12 @@ export function BidderProfileModal({
 }: BidderProfileModalProps) {
   const [formData, setFormData] = useState<BidderProfile>(bidder);
 
+  // Re-sync the form whenever the modal opens: the active bidder may have
+  // changed since last time (new blank client, sample profile, client switch).
+  useEffect(() => {
+    if (isOpen) setFormData(bidder);
+  }, [isOpen, bidder]);
+
   if (!isOpen) return null;
 
   const handleChange = (field: keyof BidderProfile, value: any) => {
@@ -29,8 +35,12 @@ export function BidderProfileModal({
     }));
   };
 
+  const isFirstTimeSetup = !bidder.companyName;
+  const canSave = formData.companyName.trim().length > 0;
+
   const handleSave = () => {
-    onSave(formData);
+    if (!canSave) return;
+    onSave({ ...formData, companyName: formData.companyName.trim() });
     onClose();
   };
 
@@ -62,17 +72,38 @@ export function BidderProfileModal({
 
         {/* Form Body */}
         <div className="p-6 overflow-y-auto space-y-5 text-xs text-slate-800 bg-[#F8FAF8]">
+          {/* First-time setup banner */}
+          {isFirstTimeSetup && (
+            <div className="bg-[#E6F2EB] border border-[#00401A]/30 rounded-xl p-3.5 flex items-start gap-2.5">
+              <Building2 className="w-4 h-4 text-[#00401A] shrink-0 mt-0.5" />
+              <div>
+                <div className="font-bold text-[#00401A]">Welcome — set up your company profile</div>
+                <div className="text-slate-600 mt-0.5">
+                  Your account starts blank: no specs, no history, no assumed values. Enter your firm&apos;s
+                  real details below — the compliance engine audits tenders against exactly what you save here.
+                  You can update any of it later from &quot;Bidder Specs&quot;.
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Company Name */}
           <div>
             <label className="font-bold text-[#00401A] block mb-1">
-              Company / Firm Name
+              Company / Firm Name <span className="text-rose-600">*</span>
             </label>
             <input
               type="text"
               value={formData.companyName}
               onChange={(e) => handleChange('companyName', e.target.value)}
+              placeholder="e.g. M/s Your Construction Company (Pvt) Ltd"
               className="w-full bg-white border border-[#CDE0D2] focus:border-[#00401A] focus:ring-1 focus:ring-[#00401A] rounded-lg p-2.5 text-slate-900 focus:outline-none transition-all"
             />
+            {!canSave && (
+              <span className="text-[10px] text-rose-600 font-semibold mt-1 block">
+                Company name is required before the profile can be saved.
+              </span>
+            )}
           </div>
 
           {/* PEC Category & Status */}
@@ -82,10 +113,11 @@ export function BidderProfileModal({
                 PEC Registration Category
               </label>
               <select
-                value={formData.pecCategory}
-                onChange={(e) => handleChange('pecCategory', e.target.value as PECCategory)}
+                value={formData.pecCategory ?? ''}
+                onChange={(e) => handleChange('pecCategory', e.target.value === '' ? null : (e.target.value as PECCategory))}
                 className="w-full bg-white border border-[#CDE0D2] focus:border-[#00401A] focus:ring-1 focus:ring-[#00401A] rounded-lg p-2.5 text-slate-900 focus:outline-none cursor-pointer"
               >
+                <option value="">— Select PEC category —</option>
                 <option value="C-A">C-A (No Limit)</option>
                 <option value="C-B">C-B (Up to PKR 3,000M)</option>
                 <option value="C-1">C-1 (Up to PKR 1,000M)</option>
@@ -160,22 +192,106 @@ export function BidderProfileModal({
             </div>
           </div>
 
+          {/* FBR NTN Number & Liquid Assets */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="font-bold text-[#00401A] block mb-1">
+                FBR NTN (National Tax Number)
+              </label>
+              <input
+                type="text"
+                value={formData.fbrRegistrationNumber}
+                onChange={(e) => handleChange('fbrRegistrationNumber', e.target.value)}
+                placeholder="e.g. 1234567-8"
+                className="w-full bg-white border border-[#CDE0D2] focus:border-[#00401A] focus:ring-1 focus:ring-[#00401A] rounded-lg p-2.5 text-slate-900 focus:outline-none font-mono"
+              />
+            </div>
+
+            <div>
+              <label className="font-bold text-[#00401A] block mb-1">
+                Liquid Assets / Working Capital (PKR)
+              </label>
+              <input
+                type="number"
+                value={formData.liquidAssetsPKR || ''}
+                onChange={(e) => handleChange('liquidAssetsPKR', Number(e.target.value))}
+                placeholder="e.g. 350000000 for PKR 350 Million"
+                className="w-full bg-white border border-[#CDE0D2] focus:border-[#00401A] focus:ring-1 focus:ring-[#00401A] rounded-lg p-2.5 text-slate-900 focus:outline-none font-mono"
+              />
+              <span className="text-[10px] text-slate-500 mt-1 block">
+                Formatted: {formatPKR(formData.liquidAssetsPKR)}
+              </span>
+            </div>
+          </div>
+
+          {/* PEC Specialization Codes & Bank Rating */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="font-bold text-[#00401A] block mb-1">
+                PEC Specialization Codes
+              </label>
+              <input
+                type="text"
+                value={formData.pecSpecializationCodes.join(', ')}
+                onChange={(e) =>
+                  handleChange(
+                    'pecSpecializationCodes',
+                    e.target.value
+                      .split(',')
+                      .map((c) => c.trim().toUpperCase())
+                      .filter(Boolean)
+                  )
+                }
+                placeholder="e.g. CE01, CE02, BC01 (comma separated)"
+                className="w-full bg-white border border-[#CDE0D2] focus:border-[#00401A] focus:ring-1 focus:ring-[#00401A] rounded-lg p-2.5 text-slate-900 focus:outline-none font-mono"
+              />
+            </div>
+
+            <div>
+              <label className="font-bold text-[#00401A] block mb-1">
+                Bank Credit Rating (Optional)
+              </label>
+              <input
+                type="text"
+                value={formData.bankRating}
+                onChange={(e) => handleChange('bankRating', e.target.value)}
+                placeholder="e.g. AA (PACRA/VIS rating of your bank)"
+                className="w-full bg-white border border-[#CDE0D2] focus:border-[#00401A] focus:ring-1 focus:ring-[#00401A] rounded-lg p-2.5 text-slate-900 focus:outline-none"
+              />
+            </div>
+          </div>
+
           {/* Stamp Paper Denomination & FBR ATL Status */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="font-bold text-[#00401A] block mb-1">
-                Uploaded Stamp Paper Value (PKR)
+                Non-Blacklisting Affidavit Prepared (Stamp Value)
               </label>
               <select
-                value={formData.uploadedAffidavits[0]?.stampPaperValuePKR || 500}
+                value={formData.uploadedAffidavits[0]?.stampPaperValuePKR ?? 0}
                 onChange={(e) => {
                   const val = Number(e.target.value);
+                  if (val === 0) {
+                    handleChange('uploadedAffidavits', []);
+                    return;
+                  }
                   const updatedAffs = [...formData.uploadedAffidavits];
-                  if (updatedAffs[0]) updatedAffs[0].stampPaperValuePKR = val;
+                  if (updatedAffs[0]) {
+                    updatedAffs[0] = { ...updatedAffs[0], stampPaperValuePKR: val };
+                  } else {
+                    updatedAffs.push({
+                      title: 'Affidavit of Non-Blacklisting & Non-Litigation',
+                      stampPaperValuePKR: val,
+                      hasBlacklistingStatement: true,
+                      hasLitigationStatement: true,
+                      isJudicialVerified: true,
+                    });
+                  }
                   handleChange('uploadedAffidavits', updatedAffs);
                 }}
                 className="w-full bg-white border border-[#CDE0D2] focus:border-[#00401A] focus:ring-1 focus:ring-[#00401A] rounded-lg p-2.5 text-slate-900 focus:outline-none cursor-pointer"
               >
+                <option value={0}>None prepared yet</option>
                 <option value={500}>Rs. 500 Judicial Stamp Paper</option>
                 <option value={100}>Rs. 100 Non-Judicial Stamp Paper (Defective for NHA)</option>
                 <option value={50}>Rs. 50 Stamp Paper</option>
@@ -253,10 +369,15 @@ export function BidderProfileModal({
             </button>
             <button
               onClick={handleSave}
-              className="px-5 py-2 rounded-lg bg-[#00401A] hover:bg-[#003315] text-white font-extrabold flex items-center gap-1.5 shadow-md shadow-[#00401A]/20 transition-all cursor-pointer"
+              disabled={!canSave}
+              className={`px-5 py-2 rounded-lg font-extrabold flex items-center gap-1.5 shadow-md transition-all ${
+                canSave
+                  ? 'bg-[#00401A] hover:bg-[#003315] text-white shadow-[#00401A]/20 cursor-pointer'
+                  : 'bg-slate-300 text-slate-500 cursor-not-allowed'
+              }`}
             >
-              <Check className="w-4 h-4 text-white" />
-              <span>Apply & Re-Audit</span>
+              <Check className="w-4 h-4" />
+              <span>{isFirstTimeSetup ? 'Save Profile & Start' : 'Apply & Re-Audit'}</span>
             </button>
           </div>
         </div>

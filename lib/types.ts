@@ -107,7 +107,7 @@ export interface TenderComplianceData {
 
 export interface BidderProfile {
   companyName: string;
-  pecCategory: PECCategory;
+  pecCategory: PECCategory | null; // null = not set yet (new user has no specs)
   pecLicenseNo?: string;
   ntnNo?: string;
   pecSpecializationCodes: string[];
@@ -132,6 +132,26 @@ export interface BidderProfile {
   ntnStatus: 'ACTIVE_TAXPAYER' | 'INACTIVE';
   fbrRegistrationNumber: string;
 }
+
+// A brand-new user starts with NO bidder data at all: no company name, no PEC
+// category, zero financials, no affidavits. They set everything up themselves
+// in the profile manager — nothing is ever pre-filled on their behalf.
+export const EMPTY_BIDDER_PROFILE: BidderProfile = {
+  companyName: '',
+  pecCategory: null,
+  pecSpecializationCodes: [],
+  pecValidityDate: '',
+  pecStatus: 'ACTIVE',
+  avgAnnualTurnoverPKR: 0,
+  netWorthPKR: 0,
+  liquidAssetsPKR: 0,
+  cdrAvailableAmountPKR: 0,
+  bankRating: '',
+  uploadedAffidavits: [],
+  isJV: false,
+  ntnStatus: 'ACTIVE_TAXPAYER',
+  fbrRegistrationNumber: '',
+};
 
 export interface ComplianceItemAudit {
   id: string;

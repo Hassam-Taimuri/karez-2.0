@@ -4,7 +4,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Loader2, TriangleAlert, X, UploadCloud } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useRouter } from 'next/navigation';
-import { saveTenderAnalysis, saveBidderProfile, getBidderProfile, getTendersByUser, createCompany, getCompaniesByUser, updateCompany, saveTenderToCompany, getTendersByCompany } from '../lib/firestoreService';
+import { saveTenderAnalysis, saveBidderProfile, getBidderProfile, getTendersByUser, createCompany, getCompaniesByUser, updateCompany, deleteCompany, saveTenderToCompany, getTendersByCompany } from '../lib/firestoreService';
 import { ClientSwitcher } from '../components/ClientSwitcher';
 import { Header } from '../components/Header';
 import { PdfDocumentViewer } from '../components/PdfDocumentViewer';
@@ -19,7 +19,7 @@ import { JvCalculatorModal } from '../components/JvCalculatorModal';
 import { ProposalDraftModal } from '../components/ProposalDraftModal';
 
 import { useIsMobile } from '../hooks/use-mobile';
-import { SampleTenderDoc, BidderProfile, AuditReport, TenderComplianceData, PECCategory, JVRules, StampPaperAffidavit } from '../lib/types';
+import { SampleTenderDoc, BidderProfile, AuditReport, TenderComplianceData, PECCategory, JVRules, StampPaperAffidavit, EMPTY_BIDDER_PROFILE } from '../lib/types';
 import { SAMPLE_TENDERS } from '../lib/sample_tenders';
 import { auditBidderEligibility, formatPKR } from '../lib/compliance_engine';
 import { renderPdfToImages, fileToDataUrl } from '../lib/pdf_pages';
@@ -235,9 +235,10 @@ export default function Home() {
   const [language, setLanguage] = useState<'en' | 'ur'>('en');
 
   const [currentTender, setCurrentTender] = useState<SampleTenderDoc | TenderComplianceData | any | null>(null);
-  const [currentBidder, setCurrentBidder] = useState<BidderProfile>(
-    SAMPLE_TENDERS[0].defaultBidderProfile
-  );
+  // New users start completely blank — no company, no specs, no history.
+  // Their real profile loads from Firestore below; samples carry their own
+  // annotated demo profiles.
+  const [currentBidder, setCurrentBidder] = useState<BidderProfile>(EMPTY_BIDDER_PROFILE);
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [highlightedClauseId, setHighlightedClauseId] = useState<string | undefined>(undefined);
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
@@ -276,7 +277,16 @@ export default function Home() {
         const userCompanies = await getCompaniesByUser(user.uid);
         
         if (userCompanies.length === 0) {
-          const savedProfile = await getBidderProfile(user.uid);
+          // Legacy single-profile migration. Reading a non-existent doc under
+          // these Firestore rules throws "insufficient permissions" (resource.data
+          // is null), so treat any failure here as simply "no legacy profile"
+          // rather than letting it abort onboarding.
+          let savedProfile: any = null;
+          try {
+            savedProfile = await getBidderProfile(user.uid);
+          } catch {
+            savedProfile = null;
+          }
           if (savedProfile) {
             const { userId, updatedAt, ...profileData } = savedProfile;
             const newCompanyId = await createCompany(user.uid, profileData);
@@ -286,6 +296,11 @@ export default function Home() {
             setCurrentBidder(profileData);
             const tenders = await getTendersByCompany(user.uid, newCompanyId);
             setSavedTenders(tenders);
+          } else {
+            // First login, nothing saved anywhere: keep everything blank and
+            // walk the user straight into setting up their own bidder profile.
+            setCurrentBidder(EMPTY_BIDDER_PROFILE);
+            setIsBidderModalOpen(true);
           }
         } else {
           setCompanies(userCompanies);
@@ -318,32 +333,42 @@ export default function Home() {
     }
   };
 
-  const handleCreateCompany = async () => {
-    if (!user) return;
-    const defaultProfile = {
-      companyName: 'New Client Company',
-      pecCategory: 'C-3',
-      pecStatus: 'ACTIVE',
-      avgAnnualTurnoverPKR: 0,
-      cdrAvailableAmountPKR: 0,
-      liquidAssetsPKR: 0,
-      fbrRegistrationNumber: '',
-      ntnStatus: 'ACTIVE_TAXPAYER',
-      bankRating: 'AA',
-      isJV: false,
-      uploadedAffidavits: [],
-    };
+  const handleDeleteCompany = async (company: any) => {
+    if (!user || !company?.id) return;
     try {
-      const newCompanyId = await createCompany(user.uid, defaultProfile);
+      await deleteCompany(company.id);
       const freshCompanies = await getCompaniesByUser(user.uid);
       setCompanies(freshCompanies);
-      setCurrentCompanyId(newCompanyId);
-      setCurrentBidder(defaultProfile as any);
-      setSavedTenders([]);
-      setIsBidderModalOpen(true);
+      // If the deleted client was active, fall back to the first remaining
+      // client, or reset to a blank profile so nothing stale lingers.
+      if (currentCompanyId === company.id) {
+        if (freshCompanies.length > 0) {
+          const next = freshCompanies[0];
+          const { id, userId, createdAt, updatedAt, ...profileData } = next;
+          setCurrentCompanyId(next.id);
+          setCurrentBidder(profileData);
+          const tenders = await getTendersByCompany(user.uid, next.id);
+          setSavedTenders(tenders);
+        } else {
+          setCurrentCompanyId(null);
+          setCurrentBidder(EMPTY_BIDDER_PROFILE);
+          setSavedTenders([]);
+        }
+      }
     } catch (err) {
-      console.warn('Could not create company:', err);
+      console.warn('Could not delete company:', err);
     }
+  };
+
+  const handleCreateCompany = () => {
+    if (!user) return;
+    // Open the profile manager completely blank; the company document is only
+    // created in Firestore when the user saves their own details — no default
+    // specs are ever written on their behalf.
+    setCurrentCompanyId(null);
+    setCurrentBidder(EMPTY_BIDDER_PROFILE);
+    setSavedTenders([]);
+    setIsBidderModalOpen(true);
   };
 
   // Human auditor overrides state
@@ -569,6 +594,7 @@ export default function Home() {
             currentCompanyId={currentCompanyId}
             onSelectCompany={handleSelectCompany}
             onCreateCompany={handleCreateCompany}
+            onDeleteCompany={handleDeleteCompany}
           />
         }
         onOpenBidderModal={() => setIsBidderModalOpen(true)}
@@ -731,8 +757,15 @@ export default function Home() {
         onSave={async (updatedProfile) => {
           setCurrentBidder(updatedProfile);
           try {
-            if (user && currentCompanyId) {
-              await updateCompany(currentCompanyId, user.uid, updatedProfile);
+            if (user) {
+              if (currentCompanyId) {
+                await updateCompany(currentCompanyId, user.uid, updatedProfile);
+              } else {
+                // First save for a new user (or a new client): create the
+                // company document now, from exactly what they entered.
+                const newCompanyId = await createCompany(user.uid, updatedProfile);
+                setCurrentCompanyId(newCompanyId);
+              }
               const freshCompanies = await getCompaniesByUser(user.uid);
               setCompanies(freshCompanies);
             }

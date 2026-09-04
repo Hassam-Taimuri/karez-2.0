@@ -96,8 +96,8 @@ export function ExecutiveReportModal({
     </div>
     <div>
       <div class="grid-title">Bidder Entity Profile:</div>
-      <div class="grid-heading">${bidder.companyName}</div>
-      <div><strong>PEC Category:</strong> ${bidder.pecCategory} (${bidder.pecStatus})</div>
+      <div class="grid-heading">${bidder.companyName || 'Company profile not set up'}</div>
+      <div><strong>PEC Category:</strong> ${bidder.pecCategory || 'Not set'} (${bidder.pecStatus})</div>
       <div><strong>3-Yr Avg Turnover:</strong> ${formatPKR(bidder.avgAnnualTurnoverPKR)}</div>
       <div><strong>FBR NTN Status:</strong> ${bidder.ntnStatus}</div>
     </div>
@@ -412,8 +412,8 @@ export function ExecutiveReportModal({
                 <span className="font-bold text-slate-500 uppercase block mb-1">
                   Bidder Entity Profile:
                 </span>
-                <div className="font-bold text-slate-900 text-sm">{bidder.companyName}</div>
-                <div className="text-slate-600">PEC Category: {bidder.pecCategory} ({bidder.pecStatus})</div>
+                <div className="font-bold text-slate-900 text-sm">{bidder.companyName || 'Company profile not set up'}</div>
+                <div className="text-slate-600">PEC Category: {bidder.pecCategory || 'Not set'} ({bidder.pecStatus})</div>
                 <div className="text-slate-600">Turnover: {formatPKR(bidder.avgAnnualTurnoverPKR)}</div>
                 <div className="text-slate-600">FBR NTN Status: {bidder.ntnStatus}</div>
               </div>

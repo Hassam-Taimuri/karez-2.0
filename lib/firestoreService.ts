@@ -5,6 +5,7 @@ import {
   setDoc,
   getDoc,
   getDocs,
+  deleteDoc,
   query,
   where,
   orderBy,
@@ -107,6 +108,12 @@ export async function updateCompany(
     userId,
     updatedAt: new Date().toISOString(),
   });
+}
+
+export async function deleteCompany(companyId: string): Promise<void> {
+  // Firestore rules restrict deletion to the document owner (userId == auth.uid).
+  const companyRef = doc(db, 'companies', companyId);
+  await deleteDoc(companyRef);
 }
 
 export async function saveTenderToCompany(

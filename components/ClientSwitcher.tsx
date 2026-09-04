@@ -1,13 +1,14 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Building2, ChevronDown, Check, Plus } from 'lucide-react';
+import { Building2, ChevronDown, Check, Plus, Trash2 } from 'lucide-react';
 
 interface ClientSwitcherProps {
   companies: any[];
   currentCompanyId: string | null;
   onSelectCompany: (company: any) => void;
   onCreateCompany: () => void;
+  onDeleteCompany?: (company: any) => void;
 }
 
 export function ClientSwitcher({
@@ -15,8 +16,10 @@ export function ClientSwitcher({
   currentCompanyId,
   onSelectCompany,
   onCreateCompany,
+  onDeleteCompany,
 }: ClientSwitcherProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const currentCompany = companies.find((c) => c.id === currentCompanyId);
@@ -61,24 +64,59 @@ export function ClientSwitcher({
             {companies.map((company) => {
               const isSelected = company.id === currentCompanyId;
               const name = company.companyName || company.name || 'Unnamed Client';
+              const isConfirming = confirmDeleteId === company.id;
               return (
-                <button
+                <div
                   key={company.id}
-                  type="button"
-                  onClick={() => {
-                    onSelectCompany(company);
-                    setIsOpen(false);
-                  }}
-                  className="w-full text-left px-3 py-2.5 hover:bg-gray-800 flex items-center justify-between transition-colors cursor-pointer"
+                  className="w-full px-3 py-2.5 hover:bg-gray-800 flex items-center justify-between transition-colors group"
                 >
-                  <div className="flex items-center gap-2 min-w-0 pr-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onSelectCompany(company);
+                      setIsOpen(false);
+                    }}
+                    className="flex items-center gap-2 min-w-0 pr-2 flex-1 cursor-pointer"
+                  >
                     <span className="bg-emerald-500 w-2 h-2 rounded-full shrink-0" />
-                    <span className="text-sm text-white font-medium truncate">
+                    <span className="text-sm text-white font-medium truncate text-left">
                       {name}
                     </span>
-                  </div>
-                  {isSelected && <Check className="w-4 h-4 text-emerald-400 shrink-0" />}
-                </button>
+                    {isSelected && <Check className="w-4 h-4 text-emerald-400 shrink-0" />}
+                  </button>
+                  {onDeleteCompany && (
+                    isConfirming ? (
+                      <span className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onDeleteCompany(company);
+                            setConfirmDeleteId(null);
+                          }}
+                          className="text-[10px] font-bold text-rose-300 bg-rose-900/60 hover:bg-rose-800 px-2 py-1 rounded cursor-pointer"
+                        >
+                          Delete
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setConfirmDeleteId(null)}
+                          className="text-[10px] font-medium text-gray-400 hover:text-gray-200 px-1.5 py-1 cursor-pointer"
+                        >
+                          Cancel
+                        </button>
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setConfirmDeleteId(company.id)}
+                        className="p-1 rounded text-gray-500 hover:text-rose-400 hover:bg-rose-950/50 opacity-0 group-hover:opacity-100 transition-all shrink-0 cursor-pointer"
+                        title="Delete this client"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )
+                  )}
+                </div>
               );
             })}
           </div>
