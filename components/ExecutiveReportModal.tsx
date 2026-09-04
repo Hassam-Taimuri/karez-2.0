@@ -296,10 +296,10 @@ export function ExecutiveReportModal({
             </div>
             <div>
               <h3 className="font-extrabold text-white text-base">
-                PPRA 2004 Technical Eligibility Audit Certificate
+                PPRA 2004 Technical Eligibility Audit Report
               </h3>
               <p className="text-xs text-emerald-100/80">
-                Official Disqualification Risk Report for Executive Procurement Board
+                AI-assisted pre-submission audit for the bidder&apos;s internal review
               </p>
             </div>
           </div>
