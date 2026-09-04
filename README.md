@@ -80,7 +80,8 @@ pip install opencv-python-headless numpy
 python scripts/clean_scanned_pdf.py public/sample-pages/nha_page7.png cleaned.png
 ```
 
-<!-- Judges' demo login: see the submission notes / presentation. -->
+**Judges' demo login:** provided with the hackathon submission entry
+(deliberately not committed to this public repository).
 
 ## Environment variables
 
