@@ -2,6 +2,8 @@
 
 **Alibaba Cloud AI Hackathon Pakistan 2026 (Bano Qabil / Alkhidmat Foundation)**
 
+**Live demo:** https://karez-20.vercel.app
+
 Karez reads Pakistani government construction tenders (NHA, LDA, C&W, WAPDA, Pak PWD)
 with a vision-capable LLM, extracts the eligibility thresholds, and checks them
 against the bidder's own profile in a **deterministic TypeScript rules engine** —

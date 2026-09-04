@@ -63,7 +63,9 @@ function stripCodeFences(text: string): string {
 }
 
 async function tryGemini(args: GenerateArgs, errors: string[]): Promise<ProviderResult | null> {
-  const apiKey = process.env.GEMINI_API_KEY;
+  // trim() also strips a UTF-8 BOM (U+FEFF) that Windows tooling can prepend
+  // when the secret is piped into the deployment platform.
+  const apiKey = (process.env.GEMINI_API_KEY || '').trim();
   if (!apiKey) {
     errors.push('gemini: GEMINI_API_KEY not configured');
     return null;
@@ -102,7 +104,7 @@ async function tryGemini(args: GenerateArgs, errors: string[]): Promise<Provider
 }
 
 async function tryQwen(args: GenerateArgs, errors: string[]): Promise<ProviderResult | null> {
-  const apiKey = process.env.DASHSCOPE_API_KEY;
+  const apiKey = (process.env.DASHSCOPE_API_KEY || '').trim();
   if (!apiKey) {
     errors.push('qwen: DASHSCOPE_API_KEY not configured');
     return null;
